@@ -1,0 +1,66 @@
+{
+  "benchmark_date": "2026-11-08",
+  "test_set_size": 20000,
+  "models": {
+    "DecisionTreeRegressor": {
+      "mae_seg": 1.4949,
+      "rmse_seg": 4.1565,
+      "r2_score": 0.899,
+      "inference_time_30k": "4.57 ms",
+      "residual_analysis": {
+        "mean_error": -0.0369,
+        "std_error": 4.1564,
+        "median_error": 0.013,
+        "p95_error_seg": 4.5329,
+        "skewness": 1.0901
+      },
+      "selected_for_production": true,
+      "reason": "Excelente R\u00b2 (0.899) y velocidad \u00f3ptima (<10 ms para 30k aristas)"
+    },
+    "RidgeRegression": {
+      "mae_seg": 2.9314,
+      "rmse_seg": 6.2621,
+      "r2_score": 0.7709,
+      "inference_time_30k": "1.52 ms",
+      "residual_analysis": {
+        "mean_error": -0.0288,
+        "std_error": 6.262,
+        "median_error": 0.1358,
+        "p95_error_seg": 8.6608,
+        "skewness": 2.8754
+      },
+      "selected_for_production": false,
+      "reason": "Modelo lineal incapaz de capturar la bimodalidad horaria (R\u00b2 0.771)"
+    },
+    "KNeighborsRegressor": {
+      "mae_seg": 2.4167,
+      "rmse_seg": 5.7177,
+      "r2_score": 0.7809,
+      "inference_time_30k": "~7.9 s",
+      "residual_analysis": {
+        "mean_error": 0.1284,
+        "std_error": 5.7162,
+        "median_error": -0.144,
+        "p95_error_seg": 8.5926,
+        "skewness": 4.3488
+      },
+      "selected_for_production": false,
+      "reason": "Inviable en tiempo real por alta latencia O(N) durante inferencia (congelar\u00eda la web)"
+    },
+    "SupportVectorRegressor": {
+      "mae_seg": 2.15,
+      "rmse_seg": 6.693,
+      "r2_score": 0.6997,
+      "inference_time_30k": "~14.8 s",
+      "residual_analysis": {
+        "mean_error": 0.7637,
+        "std_error": 6.6493,
+        "median_error": -0.0402,
+        "p95_error_seg": 7.655,
+        "skewness": 10.9835
+      },
+      "selected_for_production": false,
+      "reason": "Bajo R\u00b2 (0.665) y complejidad de entrenamiento cuadr\u00e1tica O(N\u00b2)"
+    }
+  }
+}

@@ -17,8 +17,8 @@
     "r2_score": 0.8544
   },
   "overfitting_gap_r2": 0.1456,
-  "train_time_sec": 0.0254,
-  "inference_1k_ms": 59.667,
-  "estimated_30k_edges_inference_ms": 1793.2,
+  "train_time_sec": 0.168,
+  "inference_1k_ms": 331.493,
+  "estimated_30k_edges_inference_ms": 9962.4,
   "computational_tradeoff_note": "KNN con KDTree alcanza buen R² no lineal, pero su inferencia sobre las 30.053 aristas de Rosario requiere buscar los k vecinos más cercanos para cada cuadra, siendo ~30x a 60x más lento en tiempo real que el Árbol de Decisión."
 }
