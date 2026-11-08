@@ -350,56 +350,58 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       </div>
 
-      {/* Presets Rápidos (Opcional) */}
-      <div className="border-t border-slate-800/80 pt-2">
-        <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          <span className="flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-amber-400" />
-            <span>Presets de Clima y Hora (Opcional)</span>
-          </span>
-          {activePresetId && (
-            <span className="text-[10px] text-emerald-400">Activo</span>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {presetsLoading ? (
-            <div className="col-span-2 py-2 text-center text-xs text-slate-500 animate-pulse">
-              Cargando escenarios urbanos...
-            </div>
-          ) : (
-            presets.map((preset) => {
-              const isSelected = activePresetId === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  disabled={isCalculating}
-                  onClick={() => onApplyPreset(preset)}
-                  data-testid={`preset-${preset.id}`}
-                  className={`flex items-center gap-1.5 rounded-lg border p-1.5 text-left text-xs transition ${
-                    isCalculating ? "opacity-60 cursor-not-allowed" : ""
-                  } ${
-                    isSelected
-                      ? "border-emerald-500 bg-emerald-500/15 text-emerald-200 shadow-sm"
-                      : "border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800/60"
-                  }`}
-                  title={preset.description}
-                >
-                  <span className="text-sm shrink-0">{preset.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-semibold leading-tight text-slate-100">
-                      {preset.name}
+      {/* Presets Rápidos (Opcional: sólo se muestra si se proveen presets) */}
+      {presets && presets.length > 0 && (
+        <div className="border-t border-slate-800/80 pt-2">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-amber-400" />
+              <span>Presets de Clima y Hora (Opcional)</span>
+            </span>
+            {activePresetId && (
+              <span className="text-[10px] text-emerald-400">Activo</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {presetsLoading ? (
+              <div className="col-span-2 py-2 text-center text-xs text-slate-500 animate-pulse">
+                Cargando escenarios urbanos...
+              </div>
+            ) : (
+              presets.map((preset) => {
+                const isSelected = activePresetId === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    disabled={isCalculating}
+                    onClick={() => onApplyPreset(preset)}
+                    data-testid={`preset-${preset.id}`}
+                    className={`flex items-center gap-1.5 rounded-lg border p-1.5 text-left text-xs transition ${
+                      isCalculating ? "opacity-60 cursor-not-allowed" : ""
+                    } ${
+                      isSelected
+                        ? "border-emerald-500 bg-emerald-500/15 text-emerald-200 shadow-sm"
+                        : "border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800/60"
+                    }`}
+                    title={preset.description}
+                  >
+                    <span className="text-sm shrink-0">{preset.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-semibold leading-tight text-slate-100">
+                        {preset.name}
+                      </div>
+                      <div className="text-[10px] text-slate-400 leading-tight">
+                        {preset.time_label}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-400 leading-tight">
-                      {preset.time_label}
-                    </div>
-                  </div>
-                </button>
-              );
-            })
-          )}
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

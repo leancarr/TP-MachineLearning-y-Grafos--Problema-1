@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   MapPin,
   Navigation,
@@ -9,6 +9,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
+  Plus,
+  Route,
+  Truck,
 } from "lucide-react";
 import MapViewer, { SelectionMode, ViewportStats } from "./components/MapViewer";
 import BenchmarkModal from "./components/BenchmarkModal";
@@ -27,7 +30,6 @@ import {
 import {
   calculateDeliveryTour,
   calculateRouteComparison,
-  fetchScenarioPresets,
 } from "./services/api";
 
 export function getSystemDefaultContext(): ContextParams {
@@ -130,7 +132,6 @@ export const App: React.FC = () => {
     getSystemDefaultContext()
   );
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
-  const [presets, setPresets] = useState<ScenarioPreset[]>(FALLBACK_PRESETS);
   const [appMode, setAppMode] = useState<"route" | "tour">("route");
 
   // Panel lateral ocultable para ver el mapa completo cuando se desee
@@ -169,19 +170,6 @@ export const App: React.FC = () => {
 
   // Modal de Auditoría
   const [isBenchmarkOpen, setIsBenchmarkOpen] = useState<boolean>(false);
-
-  // Cargar Presets del Backend al montar
-  useEffect(() => {
-    fetchScenarioPresets()
-      .then((data) => {
-        if (data && data.length > 0) {
-          setPresets(data);
-        }
-      })
-      .catch((err) => {
-        console.warn("Usando presets locales de respaldo:", err);
-      });
-  }, []);
 
   // Función para calcular ruta real calle por calle entre origen y destino
   const triggerRouteCalculation = useCallback(
@@ -346,22 +334,49 @@ export const App: React.FC = () => {
       } else if (effectiveMode === "depot") {
         setDepot(node);
         setSelectionMode("stop");
+        if (stops.length > 0) {
+          triggerTourOptimization(node, stops, returnToDepot, context);
+        }
       } else if (effectiveMode === "stop") {
-        if (stops.length < 10) {
+        if (!depot) {
+          setDepot(node);
+          setSelectionMode("stop");
+        } else if (stops.length < 10) {
           const newStops = [...stops, node];
           setStops(newStops);
+          triggerTourOptimization(depot, newStops, returnToDepot, context);
         }
       }
     },
     [
       origin,
       destination,
+      depot,
       stops,
+      returnToDepot,
       context,
       explicitSelectionButton,
       triggerRouteCalculation,
+      triggerTourOptimization,
     ]
   );
+
+  // Pasar directamente a Modo Varias Paradas conservando Origen/Destino si ya había
+  const handleSwitchToMultiStop = useCallback(() => {
+    setAppMode("tour");
+    if (!depot && origin) {
+      const newDepot = origin;
+      const newStops = destination ? [destination] : [];
+      setDepot(newDepot);
+      setStops(newStops);
+      setSelectionMode("stop");
+      if (newStops.length > 0) {
+        triggerTourOptimization(newDepot, newStops, returnToDepot, context);
+      }
+    } else {
+      setSelectionMode(depot ? "stop" : "depot");
+    }
+  }, [depot, origin, destination, returnToDepot, context, triggerTourOptimization]);
 
   // 3 Atajos de Ejemplos Rápidos (usando coordenadas reales para que Dijkstra trace por las calles reales)
   const handleQuickRoutePellegrini = useCallback(() => {
@@ -477,10 +492,17 @@ export const App: React.FC = () => {
   }, [appMode]);
 
   // Cambiar modo de aplicación
-  const handleAppModeChange = useCallback((mode: "route" | "tour") => {
-    setAppMode(mode);
-    setSelectionMode(mode === "route" ? "origin" : "depot");
-  }, []);
+  const handleAppModeChange = useCallback(
+    (mode: "route" | "tour") => {
+      if (mode === "tour") {
+        handleSwitchToMultiStop();
+      } else {
+        setAppMode("route");
+        setSelectionMode("origin");
+      }
+    },
+    [handleSwitchToMultiStop]
+  );
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -570,6 +592,34 @@ export const App: React.FC = () => {
             </div>
           </div>
 
+          {/* Selector Rápido de Modo arriba del todo: 2 Puntos vs Varias Paradas */}
+          <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md text-xs">
+            <button
+              type="button"
+              onClick={() => handleAppModeChange("route")}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2 font-semibold transition ${
+                appMode === "route"
+                  ? "bg-emerald-500 text-slate-950 shadow-md"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              <Route className="h-4 w-4" />
+              <span>Ruta Simple (2 Puntos)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAppModeChange("tour")}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2 font-semibold transition ${
+                appMode === "tour"
+                  ? "bg-emerald-500 text-slate-950 shadow-md"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              <Truck className="h-4 w-4" />
+              <span>Varias Paradas (+3)</span>
+            </button>
+          </div>
+
           {/* 2. Selección de Puntos en el Mapa (Origen y Destino) */}
           {appMode === "route" && (
             <div className="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
@@ -639,6 +689,16 @@ export const App: React.FC = () => {
                 </button>
               </div>
 
+              {/* Botón directo para sumar más paradas en el mapa */}
+              <button
+                type="button"
+                onClick={handleSwitchToMultiStop}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Agregar más paradas en el mapa (Multiparada)</span>
+              </button>
+
               {/* Buscador opcional por nombre de calle */}
               <StreetSearch
                 onSelectCorner={(node, mode) => {
@@ -660,13 +720,26 @@ export const App: React.FC = () => {
               onRemoveStop={(idx) => {
                 const updated = stops.filter((_, i) => i !== idx);
                 setStops(updated);
+                if (depot && updated.length > 0) {
+                  triggerTourOptimization(depot, updated, returnToDepot, context);
+                } else {
+                  setTourResult(null);
+                }
               }}
               onClearStops={() => {
+                setDepot(null);
                 setStops([]);
                 setTourResult(null);
+                setSelectionMode("depot");
               }}
               returnToDepot={returnToDepot}
-              onToggleReturnToDepot={() => setReturnToDepot((prev) => !prev)}
+              onToggleReturnToDepot={() => {
+                const nextRet = !returnToDepot;
+                setReturnToDepot(nextRet);
+                if (depot && stops.length > 0) {
+                  triggerTourOptimization(depot, stops, nextRet, context);
+                }
+              }}
               onOptimizeTour={() => {
                 if (depot) {
                   triggerTourOptimization(depot, stops, returnToDepot, context);
@@ -692,13 +765,13 @@ export const App: React.FC = () => {
             onClear={handleResetPoints}
           />
 
-          {/* 4. Panel de Control Contextual (Hora, Día, Clima y Capas siempre visibles) */}
+          {/* 4. Panel de Control Contextual (Hora, Día, Clima y Capas siempre visibles, sin Presets) */}
           <ControlPanel
             context={context}
             onContextChange={handleContextChange}
             activePresetId={activePresetId}
             onApplyPreset={handleApplyPreset}
-            presets={presets}
+            presets={[]}
             appMode={appMode}
             onAppModeChange={handleAppModeChange}
             showTrafficLayer={showTrafficLayer}

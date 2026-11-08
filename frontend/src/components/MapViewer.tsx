@@ -511,8 +511,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             <>
               <span className="h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse" />
               <span>
-                Hacé clic en el mapa para fijar el{" "}
-                <strong className="text-blue-400">DEPÓSITO</strong>
+                1.º Clic en el mapa: marcá el{" "}
+                <strong className="text-blue-400">PUNTO DE SALIDA (Depósito)</strong>
               </span>
             </>
           )}
@@ -520,8 +520,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             <>
               <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />
               <span>
-                Hacé clic en el mapa para agregar una{" "}
-                <strong className="text-amber-400">PARADA DE REPARTO</strong>
+                Clic en el mapa: agregar{" "}
+                <strong className="text-amber-400">
+                  PARADA #{stops.length + 1}
+                </strong>{" "}
+                (la ruta se actualiza sola)
               </span>
             </>
           )}
