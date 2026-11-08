@@ -70,8 +70,15 @@ interface ViewportControllerProps {
   onMapClickNode: (lat: number, lon: number) => void;
 }
 
+const DEFAULT_SAFE_CONTEXT: ContextParams = {
+  hora_dia: 8.0,
+  dia_semana: "miercoles",
+  clima: "despejado",
+  es_feriado: false,
+};
+
 const ViewportController: React.FC<ViewportControllerProps> = ({
-  context,
+  context = DEFAULT_SAFE_CONTEXT,
   showTrafficLayer,
   selectionMode,
   onEdgesLoaded,
@@ -81,6 +88,7 @@ const ViewportController: React.FC<ViewportControllerProps> = ({
   const map = useMap();
   const debounceTimerRef = useRef<number | null>(null);
   const requestCounterRef = useRef<number>(0);
+  const safeContext = context || DEFAULT_SAFE_CONTEXT;
 
   const triggerViewportFetch = useCallback(() => {
     if (!showTrafficLayer) return;
@@ -104,10 +112,10 @@ const ViewportController: React.FC<ViewportControllerProps> = ({
           max_lon: bounds.getEast(),
           zoom,
           max_edges: zoom >= 15 ? 4000 : zoom >= 13 ? 3000 : 2500,
-          hora_dia: context.hora_dia,
-          dia_semana: context.dia_semana,
-          clima: context.clima,
-          es_feriado: context.es_feriado,
+          hora_dia: safeContext.hora_dia,
+          dia_semana: safeContext.dia_semana,
+          clima: safeContext.clima,
+          es_feriado: safeContext.es_feriado,
         });
         if (reqId === requestCounterRef.current) {
           onEdgesLoaded(resp, zoom);
@@ -119,7 +127,7 @@ const ViewportController: React.FC<ViewportControllerProps> = ({
         }
       }
     }, 250);
-  }, [map, context, showTrafficLayer, onEdgesLoaded, onLoadingChange]);
+  }, [map, safeContext, showTrafficLayer, onEdgesLoaded, onLoadingChange]);
 
   // Initial load & re-fetch whenever traffic context or layer visibility changes
   useEffect(() => {
@@ -130,10 +138,10 @@ const ViewportController: React.FC<ViewportControllerProps> = ({
       }
     };
   }, [
-    context.hora_dia,
-    context.dia_semana,
-    context.clima,
-    context.es_feriado,
+    safeContext.hora_dia,
+    safeContext.dia_semana,
+    safeContext.clima,
+    safeContext.es_feriado,
     showTrafficLayer,
     triggerViewportFetch,
   ]);

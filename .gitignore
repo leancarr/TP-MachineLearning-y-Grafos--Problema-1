@@ -9,8 +9,10 @@ __pycache__/
 
 # Node / Frontend
 node_modules/
+.pnpm-store/
 frontend/dist/
 frontend/.vite/
+*.tsbuildinfo
 
 # OS / IDE / Agent
 .DS_Store

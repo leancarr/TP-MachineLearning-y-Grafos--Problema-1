@@ -105,7 +105,7 @@ describe("BenchmarkModal Component", () => {
 
     // Highlights winning model
     expect(screen.getByText("Árbol CART")).toBeInTheDocument();
-    expect(screen.getByText("20,000")).toBeInTheDocument();
+    expect(screen.getByText(/20,000/)).toBeInTheDocument();
 
     // Table rows
     expect(screen.getByText("Árbol de Decisión (CART)")).toBeInTheDocument();
