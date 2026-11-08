@@ -196,3 +196,25 @@ export interface BenchmarkMetricsResponse {
   feature_importances?: FeatureImportanceItem[];
   decision_tree_hyperparameters?: Record<string, unknown>;
 }
+
+export type str = string;
+
+export interface CongestedCorridor {
+  name: string;
+  tipo_calle: string;
+  congestion_ratio: number;
+  delay_pct: number;
+  average_speed_kmh: number;
+  nominal_speed_kmh: number;
+  lat: number;
+  lon: number;
+  sample_tramo_id: string;
+}
+
+export interface CongestedCorridorsResponse {
+  total_corridors: number;
+  context: Record<string, unknown>;
+  corridors: CongestedCorridor[];
+  execution_time_ms: number;
+}
+

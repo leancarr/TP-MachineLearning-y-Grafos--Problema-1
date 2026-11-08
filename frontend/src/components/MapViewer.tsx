@@ -41,9 +41,11 @@ export interface MapViewerProps {
   showTrafficLayer?: boolean;
   showStaticRoute?: boolean;
   showDynamicRoute?: boolean;
+  flyToLocation?: { lat: number; lon: number; zoom?: number } | null;
   onNodeSelected?: (node: NodeInfo, mode: SelectionMode) => void;
   onViewportStatsChange?: (stats: ViewportStats) => void;
 }
+
 
 const ROSARIO_CENTER: [number, number] = [-32.9468, -60.6393];
 const DEFAULT_ZOOM = 13;
@@ -163,6 +165,20 @@ const ViewportController: React.FC<ViewportControllerProps> = ({
   return null;
 };
 
+interface MapFlyToControllerProps {
+  target?: { lat: number; lon: number; zoom?: number } | null;
+}
+
+const MapFlyToController: React.FC<MapFlyToControllerProps> = ({ target }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (target && typeof target.lat === "number" && typeof target.lon === "number") {
+      map.flyTo([target.lat, target.lon], target.zoom ?? 15, { duration: 1.2 });
+    }
+  }, [target, map]);
+  return null;
+};
+
 export const MapViewer: React.FC<MapViewerProps> = ({
   context,
   origin = null,
@@ -175,9 +191,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   showTrafficLayer = true,
   showStaticRoute = true,
   showDynamicRoute = true,
+  flyToLocation = null,
   onNodeSelected,
   onViewportStatsChange,
 }) => {
+
   const [edges, setEdges] = useState<ViewportEdge[]>([]);
   const [zoom, setZoom] = useState<number>(DEFAULT_ZOOM);
   const [loading, setLoading] = useState<boolean>(false);
@@ -272,9 +290,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         className="h-full w-full z-0"
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={16}
         />
+
+        <MapFlyToController target={flyToLocation} />
+
 
         <ViewportController
           context={context}
@@ -351,51 +373,77 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           </Polyline>
         )}
 
-        {/* Origin Marker */}
+        {/* Origin Marker with pulse aura */}
         {origin && (
-          <CircleMarker
-            center={[origin.lat, origin.lon]}
-            radius={9}
-            pathOptions={{
-              color: "#ffffff",
-              weight: 2.5,
-              fillColor: "#10B981",
-              fillOpacity: 1,
-            }}
-          >
-            <Tooltip permanent direction="top" offset={[0, -10]}>
-              <span className="font-semibold text-emerald-700">
-                Origen: {origin.label}
-              </span>
-            </Tooltip>
-          </CircleMarker>
+          <>
+            <CircleMarker
+              center={[origin.lat, origin.lon]}
+              radius={16}
+              pathOptions={{
+                color: "#10B981",
+                weight: 1.5,
+                fillColor: "#10B981",
+                fillOpacity: 0.22,
+                className: "animate-ping origin-center",
+              }}
+            />
+            <CircleMarker
+              center={[origin.lat, origin.lon]}
+              radius={8}
+              pathOptions={{
+                color: "#ffffff",
+                weight: 2.5,
+                fillColor: "#10B981",
+                fillOpacity: 1,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+                <span className="font-semibold text-emerald-700">
+                  Origen: {origin.label}
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          </>
         )}
 
-        {/* Destination Marker */}
+        {/* Destination Marker with pulse aura */}
         {destination && (
-          <CircleMarker
-            center={[destination.lat, destination.lon]}
-            radius={9}
-            pathOptions={{
-              color: "#ffffff",
-              weight: 2.5,
-              fillColor: "#EF4444",
-              fillOpacity: 1,
-            }}
-          >
-            <Tooltip permanent direction="top" offset={[0, -10]}>
-              <span className="font-semibold text-rose-700">
-                Destino: {destination.label}
-              </span>
-            </Tooltip>
-          </CircleMarker>
+          <>
+            <CircleMarker
+              center={[destination.lat, destination.lon]}
+              radius={16}
+              pathOptions={{
+                color: "#EF4444",
+                weight: 1.5,
+                fillColor: "#EF4444",
+                fillOpacity: 0.22,
+                className: "animate-ping origin-center",
+              }}
+            />
+            <CircleMarker
+              center={[destination.lat, destination.lon]}
+              radius={8}
+              pathOptions={{
+                color: "#ffffff",
+                weight: 2.5,
+                fillColor: "#EF4444",
+                fillOpacity: 1,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+                <span className="font-semibold text-rose-700">
+                  Destino: {destination.label}
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          </>
         )}
 
         {/* Depot Marker (for Multi-stop Tour) */}
         {depot && (
           <CircleMarker
             center={[depot.lat, depot.lon]}
-            radius={10}
+            radius={9}
             pathOptions={{
               color: "#ffffff",
               weight: 2.5,
@@ -403,7 +451,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               fillOpacity: 1,
             }}
           >
-            <Tooltip permanent direction="top" offset={[0, -10]}>
+            <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
               <span className="font-semibold text-blue-700">
                 Depósito: {depot.label}
               </span>
@@ -424,13 +472,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               fillOpacity: 1,
             }}
           >
-            <Tooltip permanent direction="top" offset={[0, -8]}>
+            <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
               <span className="font-semibold text-amber-800">
                 #{idx + 1} · {stop.label}
               </span>
             </Tooltip>
           </CircleMarker>
         ))}
+
       </MapContainer>
 
       {/* Top-right HUD: Progressive LOD & Traffic Legend */}

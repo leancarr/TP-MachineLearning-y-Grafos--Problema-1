@@ -244,3 +244,26 @@ class HealthResponse(BaseModel):
     ml_model_loaded: bool
     lru_cache_entries: int
     uptime_seconds: float
+
+
+class CongestedCorridor(BaseModel):
+    """Corredor vial con su nivel de congestión agregado y métricas de velocidad."""
+
+    name: str = Field(..., description="Nombre de la arteria vial")
+    tipo_calle: str = Field(..., description="Tipo de calle (avenida, circunvalacion, comercial, residencial)")
+    congestion_ratio: float = Field(..., description="Ratio de congestión respecto al tiempo base")
+    delay_pct: float = Field(..., description="Porcentaje de demora adicional debido a congestión")
+    average_speed_kmh: float = Field(..., description="Velocidad actual estimada en km/h")
+    nominal_speed_kmh: float = Field(..., description="Velocidad máxima reglamentaria nominal en km/h")
+    lat: float = Field(..., description="Latitud del centroide de la arteria")
+    lon: float = Field(..., description="Longitud del centroide de la arteria")
+    sample_tramo_id: str = Field(..., description="ID de un tramo representativo")
+
+
+class CongestedCorridorsResponse(BaseModel):
+    """Respuesta del Top de arterias más congestionadas en tiempo real."""
+
+    total_corridors: int
+    context: dict[str, Any]
+    corridors: list[CongestedCorridor]
+    execution_time_ms: float

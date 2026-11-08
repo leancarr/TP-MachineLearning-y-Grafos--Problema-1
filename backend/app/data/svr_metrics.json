@@ -17,8 +17,8 @@
     "r2_score": 0.7987
   },
   "overfitting_gap_r2": 0.1123,
-  "train_time_sec": 12.1431,
-  "inference_1k_ms": 610.58,
-  "estimated_30k_edges_inference_ms": 18349.8,
+  "train_time_sec": 11.7435,
+  "inference_1k_ms": 528.48,
+  "estimated_30k_edges_inference_ms": 15882.4,
   "computational_tradeoff_note": "SVR con kernel RBF tiene costo cuadrático/cúbico en entrenamiento y evalúa miles de vectores de soporte por cada predicción, demorando varios cientos de milisegundos para actualizar las 30.053 cuadras de Rosario frente a <15 ms del Árbol de Decisión."
 }

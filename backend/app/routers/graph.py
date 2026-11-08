@@ -9,6 +9,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from backend.app.schemas import (
+    CongestedCorridorsResponse,
+    ContextParams,
     NodeInfo,
     ViewportRequest,
     ViewportResponse,
@@ -60,6 +62,45 @@ def get_graph_viewport(
             "zoom": req.zoom,
         },
         edges=edges,
+        execution_time_ms=round(elapsed_ms, 2),
+    )
+
+
+@router.post(
+    "/graph/congested",
+    response_model=CongestedCorridorsResponse,
+    summary="Top de arterias más congestionadas en tiempo real",
+)
+def get_congested_corridors(
+    req: ContextParams,
+    limit: int = Query(default=10, ge=1, le=50, description="Cantidad de arterias a retornar"),
+    state: AppState = Depends(get_app_state),
+) -> CongestedCorridorsResponse:
+    """
+    Retorna el ranking de las arterias más congestionadas de Rosario para el contexto
+    temporal y meteorológico consultado.
+    """
+    t0 = time.perf_counter()
+
+    corridors = state.get_top_congested_corridors(
+        hora_dia=req.hora_dia,
+        dia_semana=req.dia_semana,
+        clima=req.clima,
+        es_feriado=req.es_feriado,
+        limit=limit,
+    )
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    return CongestedCorridorsResponse(
+        total_corridors=len(corridors),
+        context={
+            "hora_dia": req.hora_dia,
+            "dia_semana": req.dia_semana,
+            "clima": req.clima,
+            "es_feriado": req.es_feriado,
+        },
+        corridors=corridors,
         execution_time_ms=round(elapsed_ms, 2),
     )
 

@@ -22,7 +22,7 @@ from backend.app.graph.dijkstra import DijkstraRouter
 from backend.app.graph.spatial import RosarioSpatialIndex
 from backend.app.graph.tsp import DeliveryTourOptimizer
 from backend.app.ml.predictor import NetworkTravelTimePredictor
-from backend.app.schemas import ViewportEdge
+from backend.app.schemas import CongestedCorridor, ViewportEdge
 
 
 class AppState:
@@ -36,6 +36,18 @@ class AppState:
         self.predictor: NetworkTravelTimePredictor | None = None
         self.router: DijkstraRouter | None = None
         self.tsp_optimizer: DeliveryTourOptimizer | None = None
+
+        # Precomputación para ranking de corredores viales (/api/graph/congested)
+        self._valid_edge_ids: np.ndarray | None = None
+        self._valid_street_ids: np.ndarray | None = None
+        self._n_corridors: int = 0
+        self._corridor_names: list[str] = []
+        self._corridor_counts: np.ndarray | None = None
+        self._corridor_lats: np.ndarray | None = None
+        self._corridor_lons: np.ndarray | None = None
+        self._corridor_sample_tramos: list[str] = []
+        self._corridor_tipos: list[str] = []
+        self._corridor_nominal_speeds: np.ndarray | None = None
 
         self.current_context: dict[str, Any] = {
             "hora_dia": 8.0,
@@ -69,6 +81,9 @@ class AppState:
 
         # 6. Optimizador de ronda TSP 2-opt
         self.tsp_optimizer = DeliveryTourOptimizer(self.graph)
+
+        # 7. Precomputación de corredores viales para top congestionados
+        self._init_corridors()
 
         # Precalentamiento del predictor con estado 'Día Normal' (Miércoles 08:00 hs)
         initial_times, _, _ = self.predictor.predict_network_times(
@@ -194,6 +209,135 @@ class AppState:
             )
 
         return result
+
+    def _init_corridors(self) -> None:
+        """Precomputa las estructuras vectorizadas de calles para cálculo de arterias congestionadas (<2 ms)."""
+        street_names: list[str] = []
+        street_to_id: dict[str, int] = {}
+        edge_street_ids = np.full(len(self.graph.edges), -1, dtype=np.int32)
+
+        for idx, edge in enumerate(self.graph.edges):
+            name = (edge.get("nombre_calle") or "").strip()
+            name_lower = name.lower()
+            if not name or "s/n" in name_lower or "sin nombre" in name_lower:
+                continue
+            if name not in street_to_id:
+                street_to_id[name] = len(street_names)
+                street_names.append(name)
+            edge_street_ids[idx] = street_to_id[name]
+
+        valid_edge_mask = edge_street_ids >= 0
+        self._valid_edge_ids = np.where(valid_edge_mask)[0]
+        self._valid_street_ids = edge_street_ids[self._valid_edge_ids]
+        self._n_corridors = len(street_names)
+        self._corridor_names = street_names
+
+        counts = np.bincount(self._valid_street_ids, minlength=self._n_corridors)
+        self._corridor_counts = np.maximum(counts, 1)
+
+        # Centroides usando self.spatial_index._edge_u_lat y _edge_u_lon
+        u_lats = self.spatial_index._edge_u_lat[self._valid_edge_ids]
+        u_lons = self.spatial_index._edge_u_lon[self._valid_edge_ids]
+        sum_lats = np.bincount(self._valid_street_ids, weights=u_lats, minlength=self._n_corridors)
+        sum_lons = np.bincount(self._valid_street_ids, weights=u_lons, minlength=self._n_corridors)
+        self._corridor_lats = sum_lats / self._corridor_counts
+        self._corridor_lons = sum_lons / self._corridor_counts
+
+        # Tramo representativo y tipo de calle
+        street_first_edge: dict[int, int] = {}
+        for idx in self._valid_edge_ids:
+            s_id = edge_street_ids[idx]
+            if s_id not in street_first_edge:
+                street_first_edge[s_id] = idx
+                if len(street_first_edge) == self._n_corridors:
+                    break
+
+        self._corridor_sample_tramos = [
+            str(self.graph.edges[street_first_edge[i]]["tramo_id"])
+            for i in range(self._n_corridors)
+        ]
+        self._corridor_tipos = [
+            str(self.graph.edges[street_first_edge[i]]["tipo_calle"])
+            for i in range(self._n_corridors)
+        ]
+
+        # Velocidades nominales promedio históricas
+        nom_speeds = np.array(
+            [float(self.graph.edges[idx]["velocidad_promedio_historica"]) for idx in self._valid_edge_ids],
+            dtype=np.float64,
+        )
+        self._corridor_nominal_speeds = (
+            np.bincount(self._valid_street_ids, weights=nom_speeds, minlength=self._n_corridors)
+            / self._corridor_counts
+        )
+
+    def get_top_congested_corridors(
+        self,
+        hora_dia: float,
+        dia_semana: str,
+        clima: str,
+        es_feriado: bool,
+        limit: int = 10,
+    ) -> list[CongestedCorridor]:
+        """
+        Calcula el ranking del Top N arterias más congestionadas para el contexto urbano dado.
+        Ordenado descendentemente por congestion_ratio promedio.
+        """
+        if self._valid_edge_ids is None:
+            self._init_corridors()
+
+        # 1. Sincronizar pesos dinámicos en memoria RAM
+        dyn_weights, _, _ = self.sync_weights_for_context(
+            hora_dia=hora_dia,
+            dia_semana=dia_semana,
+            clima=clima,
+            es_feriado=es_feriado,
+        )
+
+        base_times = self.graph.base_times
+        lengths = self.graph.static_lengths
+
+        valid_edges = self._valid_edge_ids
+        valid_streets = self._valid_street_ids
+        n_corridors = self._n_corridors
+        counts = self._corridor_counts
+
+        # 2. Calcular ratios y velocidades por arista
+        sub_dyn = dyn_weights[valid_edges]
+        sub_base = base_times[valid_edges]
+        sub_lengths = lengths[valid_edges]
+
+        edge_ratios = sub_dyn / sub_base
+        edge_speeds = (sub_lengths / sub_dyn) * 3.6
+
+        # 3. Promediar por arteria usando np.bincount
+        mean_ratios = np.bincount(valid_streets, weights=edge_ratios, minlength=n_corridors) / counts
+        mean_speeds = np.bincount(valid_streets, weights=edge_speeds, minlength=n_corridors) / counts
+
+        # 4. Ordenar de mayor a menor por congestion_ratio_avg
+        actual_limit = min(limit, n_corridors)
+        top_indices = np.argpartition(mean_ratios, -actual_limit)[-actual_limit:]
+        top_sorted = top_indices[np.argsort(-mean_ratios[top_indices])]
+
+        results: list[CongestedCorridor] = []
+        for i in top_sorted:
+            ratio_val = float(mean_ratios[i])
+            delay_val = (ratio_val - 1.0) * 100.0
+            results.append(
+                CongestedCorridor(
+                    name=self._corridor_names[i],
+                    tipo_calle=self._corridor_tipos[i],
+                    congestion_ratio=round(ratio_val, 2),
+                    delay_pct=round(delay_val, 1),
+                    average_speed_kmh=round(float(mean_speeds[i]), 1),
+                    nominal_speed_kmh=round(float(self._corridor_nominal_speeds[i]), 1),
+                    lat=round(float(self._corridor_lats[i]), 6),
+                    lon=round(float(self._corridor_lons[i]), 6),
+                    sample_tramo_id=self._corridor_sample_tramos[i],
+                )
+            )
+
+        return results
 
 
 # Singleton global

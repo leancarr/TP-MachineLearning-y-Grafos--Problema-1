@@ -15,8 +15,8 @@
     "r2_score": 0.776
   },
   "overfitting_gap_r2": 0.0134,
-  "train_time_sec": 0.0681,
-  "inference_1k_ms": 0.3821,
+  "train_time_sec": 0.2795,
+  "inference_1k_ms": 0.3757,
   "intercept": 17.8767,
   "coefficients": [
     {

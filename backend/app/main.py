@@ -83,6 +83,7 @@ def root() -> JSONResponse:
                 "search_nodes": "/api/nodes/search",
                 "metrics": "/api/metrics",
                 "presets": "/api/presets",
+                "congested": "/api/graph/congested",
             },
         }
     )
