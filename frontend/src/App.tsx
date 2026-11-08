@@ -6,17 +6,19 @@ import {
   Car,
   Package,
   Zap,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RotateCcw,
 } from "lucide-react";
 import MapViewer, { SelectionMode, ViewportStats } from "./components/MapViewer";
 import BenchmarkModal from "./components/BenchmarkModal";
 import ControlPanel from "./components/ControlPanel";
 import MetricsCard from "./components/MetricsCard";
 import StopsManager from "./components/StopsManager";
-import CongestionMonitor from "./components/CongestionMonitor";
 import StreetSearch from "./components/StreetSearch";
 import {
-  CongestedCorridor,
   ContextParams,
+  DiaSemanaType,
   NodeInfo,
   RouteResponse,
   ScenarioPreset,
@@ -28,36 +30,31 @@ import {
   fetchScenarioPresets,
 } from "./services/api";
 
-export const DEFAULT_CONTEXT: ContextParams = {
-  hora_dia: 8.0,
-  dia_semana: "miercoles",
-  clima: "despejado",
-  es_feriado: false,
-};
+export function getSystemDefaultContext(): ContextParams {
+  const now = new Date();
+  const days: DiaSemanaType[] = [
+    "domingo",
+    "lunes",
+    "martes",
+    "miercoles",
+    "jueves",
+    "viernes",
+    "sabado",
+  ];
+  const dia_semana = days[now.getDay()] ?? "miercoles";
+  const hours = now.getHours();
+  const halfHour = now.getMinutes() >= 30 ? 0.5 : 0.0;
 
+  return {
+    hora_dia: hours + halfHour,
+    dia_semana,
+    clima: "despejado",
+    es_feriado: false,
+  };
+}
+
+export const DEFAULT_CONTEXT: ContextParams = getSystemDefaultContext();
 export const DEFAULT_NORMAL_DAY_CONTEXT = DEFAULT_CONTEXT;
-
-// Preset de fábrica Showcase (Pico con Tormenta: Peor caso urbano)
-export const SHOWCASE_CONTEXT: ContextParams = {
-  hora_dia: 18.5,
-  dia_semana: "viernes",
-  clima: "tormenta",
-  es_feriado: false,
-};
-
-export const SHOWCASE_ORIGIN: NodeInfo = {
-  id: 1001,
-  lat: -32.9377,
-  lon: -60.6728,
-  label: "Bv. Avellaneda y Córdoba (Terminal de Ómnibus)",
-};
-
-export const SHOWCASE_DESTINATION: NodeInfo = {
-  id: 1002,
-  lat: -32.9475,
-  lon: -60.6305,
-  label: "Av. Belgrano y Córdoba (Monumento a la Bandera)",
-};
 
 export const FALLBACK_PRESETS: ScenarioPreset[] = [
   {
@@ -127,151 +124,37 @@ export const FALLBACK_PRESETS: ScenarioPreset[] = [
   },
 ];
 
-function getShowcaseRouteResponse(
-  orig: NodeInfo,
-  dest: NodeInfo,
-  ctx: ContextParams
-): RouteResponse {
-  // Coordenadas realistas de Rosario entre Terminal de Ómnibus y Monumento
-  const staticCoords: [number, number][] = [
-    [orig.lat, orig.lon],
-    [-32.9395, -60.6705],
-    [-32.942, -60.663],
-    [-32.945, -60.654],
-    [-32.9468, -60.642],
-    [-32.9472, -60.635],
-    [dest.lat, dest.lon],
-  ];
-
-  const dynamicCoords: [number, number][] = [
-    [orig.lat, orig.lon],
-    [-32.936, -60.67],
-    [-32.9385, -60.658],
-    [-32.9415, -60.645],
-    [-32.944, -60.635],
-    [-32.946, -60.631],
-    [dest.lat, dest.lon],
-  ];
-
-  return {
-    origin: orig,
-    destination: dest,
-    static_route: {
-      found: true,
-      mode: "static_distance",
-      distance_m: 4820,
-      distance_km: 4.82,
-      time_sec: 1344,
-      time_min: 22.4,
-      nodes: [orig.id, 9999, dest.id],
-      coordinates: staticCoords,
-      tramos: ["tramo_s1", "tramo_s2"],
-      execution_time_ms: 1.8,
-    },
-    dynamic_route: {
-      found: true,
-      mode: "dynamic_ml_time",
-      distance_m: 5170,
-      distance_km: 5.17,
-      time_sec: 996,
-      time_min: 16.6,
-      nodes: [orig.id, 8888, dest.id],
-      coordinates: dynamicCoords,
-      tramos: ["tramo_d1", "tramo_d2", "tramo_d3"],
-      execution_time_ms: 4.2,
-    },
-    comparison: {
-      time_saved_sec: 348,
-      time_saved_min: 5.8,
-      time_saved_pct: 25.9,
-      distance_diff_m: 350,
-      is_dynamic_faster: true,
-    },
-    context: { ...ctx },
-    total_execution_time_ms: 6.0,
-  };
-}
-
-function getShowcaseTourResponse(
-  dep: NodeInfo,
-  stps: NodeInfo[],
-  ctx: ContextParams
-): TourResponse {
-  const coords: [number, number][] = [
-    [dep.lat, dep.lon],
-    ...stps.map((s) => [s.lat, s.lon] as [number, number]),
-    [dep.lat, dep.lon],
-  ];
-
-  return {
-    dynamic_tour: {
-      mode: "tsp_dynamic_2opt",
-      ordered_sequence: [dep.id, ...stps.map((s) => s.id), dep.id],
-      numbered_stops: [
-        {
-          visit_order: 0,
-          node_id: dep.id,
-          label: dep.label,
-          lat: dep.lat,
-          lon: dep.lon,
-        },
-        ...stps.map((s, idx) => ({
-          visit_order: idx + 1,
-          node_id: s.id,
-          label: s.label,
-          lat: s.lat,
-          lon: s.lon,
-        })),
-      ],
-      legs: [],
-      coordinates: coords,
-      total_distance_km: 14.8,
-      total_time_min: 34.5,
-      execution_time_ms: 8.5,
-    },
-    static_tour: {
-      mode: "tsp_static_naive",
-      ordered_sequence: [dep.id, ...stps.map((s) => s.id), dep.id],
-      numbered_stops: [],
-      legs: [],
-      coordinates: coords,
-      total_distance_km: 17.2,
-      total_time_min: 46.2,
-      execution_time_ms: 3.1,
-    },
-    time_saved_sec: 702,
-    time_saved_min: 11.7,
-    time_saved_pct: 25.3,
-    context: { ...ctx },
-    total_execution_time_ms: 11.6,
-  };
-}
-
 export const App: React.FC = () => {
-  // Estado inicial Showcase de fábrica: Pico con Tormenta y Terminal -> Monumento
-  const [context, setContext] = useState<ContextParams>(SHOWCASE_CONTEXT);
-  const [activePresetId, setActivePresetId] = useState<string | null>(
-    "pico_tarde_tormenta"
+  // Inicializa por defecto con la hora y día reales del sistema operativo / navegador
+  const [context, setContext] = useState<ContextParams>(() =>
+    getSystemDefaultContext()
   );
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [presets, setPresets] = useState<ScenarioPreset[]>(FALLBACK_PRESETS);
   const [appMode, setAppMode] = useState<"route" | "tour">("route");
 
-  // Puntos de Ruteo inicializados con Showcase
-  const [origin, setOrigin] = useState<NodeInfo | null>(SHOWCASE_ORIGIN);
-  const [destination, setDestination] = useState<NodeInfo | null>(
-    SHOWCASE_DESTINATION
-  );
+  // Panel lateral ocultable para ver el mapa completo cuando se desee
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+
+  // Puntos de Ruteo (limpios al iniciar para que el usuario elija con 2 clics en el mapa)
+  const [origin, setOrigin] = useState<NodeInfo | null>(null);
+  const [destination, setDestination] = useState<NodeInfo | null>(null);
+
+  // Controla si el usuario presionó explícitamente el botón de cambiar sólo el Origen
+  const [explicitSelectionButton, setExplicitSelectionButton] =
+    useState<boolean>(false);
 
   // Puntos de TSP
   const [depot, setDepot] = useState<NodeInfo | null>(null);
   const [stops, setStops] = useState<NodeInfo[]>([]);
   const [returnToDepot, setReturnToDepot] = useState<boolean>(true);
 
-  // Estados de Interacción y Resultados
-  const [selectionMode, setSelectionMode] = useState<SelectionMode>(null);
+  // Estados de Interacción y Resultados: SIEMPRE activo en "origin" al iniciar
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("origin");
   const [routeResult, setRouteResult] = useState<RouteResponse | null>(null);
   const [tourResult, setTourResult] = useState<TourResponse | null>(null);
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   // Capas, Visualización y Cámara
   const [showTrafficLayer, setShowTrafficLayer] = useState<boolean>(true);
@@ -300,27 +183,31 @@ export const App: React.FC = () => {
       });
   }, []);
 
-  // Función para calcular ruta origen-destino
+  // Función para calcular ruta real calle por calle entre origen y destino
   const triggerRouteCalculation = useCallback(
     async (orig: NodeInfo, dest: NodeInfo, ctx: ContextParams) => {
       setIsCalculating(true);
+      setRouteError(null);
       try {
         const res = await calculateRouteComparison({
-          origin_id: orig.id,
-          destination_id: dest.id,
+          origin_id: orig.id > 10000 ? orig.id : undefined,
+          destination_id: dest.id > 10000 ? dest.id : undefined,
           origin_lat: orig.lat,
           origin_lon: orig.lon,
           destination_lat: dest.lat,
           destination_lon: dest.lon,
           ...ctx,
         });
+        setOrigin(res.origin);
+        setDestination(res.destination);
         setRouteResult(res);
       } catch (err) {
-        console.warn(
-          "No se pudo conectar con backend en tiempo real, activando showcase garantizado:",
-          err
+        console.error("Error calculando ruta en backend:", err);
+        setRouteError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo calcular la ruta entre esas esquinas."
         );
-        setRouteResult(getShowcaseRouteResponse(orig, dest, ctx));
       } finally {
         setIsCalculating(false);
       }
@@ -328,22 +215,35 @@ export const App: React.FC = () => {
     []
   );
 
-  // Función para optimizar ronda de entregas (TSP 2-opt)
+  // Función para optimizar ronda de entregas (TSP 2-opt) por calles reales
   const triggerTourOptimization = useCallback(
     async (dep: NodeInfo, stps: NodeInfo[], ret: boolean, ctx: ContextParams) => {
       if (!dep || stps.length === 0) return;
       setIsCalculating(true);
+      setRouteError(null);
       try {
         const res = await calculateDeliveryTour({
-          depot: { node_id: dep.id, lat: dep.lat, lon: dep.lon },
-          stops: stps.map((s) => ({ node_id: s.id, lat: s.lat, lon: s.lon })),
+          depot: {
+            node_id: dep.id > 10000 ? dep.id : undefined,
+            lat: dep.lat,
+            lon: dep.lon,
+          },
+          stops: stps.map((s) => ({
+            node_id: s.id > 10000 ? s.id : undefined,
+            lat: s.lat,
+            lon: s.lon,
+          })),
           return_to_depot: ret,
           ...ctx,
         });
         setTourResult(res);
       } catch (err) {
-        console.warn("Fallo cálculo TSP en backend, usando cálculo showcase:", err);
-        setTourResult(getShowcaseTourResponse(dep, stps, ctx));
+        console.error("Error en cálculo TSP:", err);
+        setRouteError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo optimizar la ronda de reparto."
+        );
       } finally {
         setIsCalculating(false);
       }
@@ -351,16 +251,7 @@ export const App: React.FC = () => {
     []
   );
 
-  // Ejecución inicial automática Showcase al montar (Cero pantallas vacías)
-  useEffect(() => {
-    triggerRouteCalculation(
-      SHOWCASE_ORIGIN,
-      SHOWCASE_DESTINATION,
-      SHOWCASE_CONTEXT
-    );
-  }, [triggerRouteCalculation]);
-
-  // Recálculo reactivo cuando cambia el contexto (sliders, clima o presets)
+  // Recálculo reactivo cuando el usuario cambia hora, día o clima
   const handleContextChange = useCallback(
     (newCtx: ContextParams) => {
       setContext(newCtx);
@@ -384,6 +275,15 @@ export const App: React.FC = () => {
       triggerTourOptimization,
     ]
   );
+
+  // Botón para volver a la hora y día reales del sistema operativo
+  const handleUseCurrentTime = useCallback(() => {
+    const sysCtx = getSystemDefaultContext();
+    handleContextChange({
+      ...sysCtx,
+      clima: context.clima,
+    });
+  }, [context.clima, handleContextChange]);
 
   // Aplicar Preset de 1 Clic
   const handleApplyPreset = useCallback(
@@ -416,45 +316,64 @@ export const App: React.FC = () => {
     ]
   );
 
-  // Manejador de clics en esquinas del mapa
+  // Manejador de clics en esquinas del mapa:
+  // Ciclo intuitivo de 2 clics: Clic 1 = Origen -> Clic 2 = Destino (y calcula ruta) -> Clic 3 = Nuevo Origen
   const handleNodeSelected = useCallback(
     (node: NodeInfo, mode: SelectionMode) => {
-      if (mode === "origin") {
+      const effectiveMode = mode || "origin";
+
+      if (effectiveMode === "origin") {
         setOrigin(node);
-        setSelectionMode(destination ? null : "destination");
-        if (destination) {
+        if (explicitSelectionButton && destination) {
+          // Si tocó el botón "Origen" en el panel y ya tenía destino, recalcula con ese destino
+          setExplicitSelectionButton(false);
+          setSelectionMode("destination");
           triggerRouteCalculation(node, destination, context);
+        } else {
+          // Flujo natural en el mapa: el 1er clic fija Origen, limpia ruta previa y pide el 2do clic (Destino)
+          setDestination(null);
+          setRouteResult(null);
+          setSelectionMode("destination");
         }
-      } else if (mode === "destination") {
+      } else if (effectiveMode === "destination") {
         setDestination(node);
-        setSelectionMode(origin ? null : "origin");
+        setExplicitSelectionButton(false);
+        // Luego de marcar el destino, deja listo "origin" por si el usuario quiere armar otra ruta con 2 clics
+        setSelectionMode("origin");
         if (origin) {
           triggerRouteCalculation(origin, node, context);
         }
-      } else if (mode === "depot") {
+      } else if (effectiveMode === "depot") {
         setDepot(node);
         setSelectionMode("stop");
-      } else if (mode === "stop") {
+      } else if (effectiveMode === "stop") {
         if (stops.length < 10) {
           const newStops = [...stops, node];
           setStops(newStops);
         }
       }
     },
-    [origin, destination, stops, context, triggerRouteCalculation]
+    [
+      origin,
+      destination,
+      stops,
+      context,
+      explicitSelectionButton,
+      triggerRouteCalculation,
+    ]
   );
 
-  // 3 Atajos de Rutas Rápidas
+  // 3 Atajos de Ejemplos Rápidos (usando coordenadas reales para que Dijkstra trace por las calles reales)
   const handleQuickRoutePellegrini = useCallback(() => {
     setAppMode("route");
     const orig: NodeInfo = {
-      id: 1003,
+      id: 0,
       lat: -32.9554,
       lon: -60.6558,
-      label: "Av. Carlos Pellegrini y Corrientes",
+      label: "Av. Pellegrini y Corrientes",
     };
     const dest: NodeInfo = {
-      id: 1002,
+      id: 0,
       lat: -32.9475,
       lon: -60.6305,
       label: "Av. Belgrano y Córdoba (Monumento)",
@@ -469,6 +388,7 @@ export const App: React.FC = () => {
     setDestination(dest);
     setContext(ctx);
     setActivePresetId("pico_tarde_tormenta");
+    setSelectionMode("origin");
     triggerRouteCalculation(orig, dest, ctx);
     setFlyToLocation({ lat: -32.9515, lon: -60.643, zoom: 14 });
   }, [triggerRouteCalculation]);
@@ -476,16 +396,16 @@ export const App: React.FC = () => {
   const handleQuickRouteCircunvalacion = useCallback(() => {
     setAppMode("route");
     const orig: NodeInfo = {
-      id: 1005,
+      id: 0,
       lat: -32.973,
       lon: -60.68,
       label: "Av. Circunvalación y Av. Pellegrini",
     };
     const dest: NodeInfo = {
-      id: 1004,
+      id: 0,
       lat: -32.9468,
       lon: -60.6393,
-      label: "Bv. Nicasio Oroño y Córdoba (Microcentro)",
+      label: "Bv. Oroño y Córdoba (Centro)",
     };
     const ctx: ContextParams = {
       hora_dia: 8.0,
@@ -497,6 +417,7 @@ export const App: React.FC = () => {
     setDestination(dest);
     setContext(ctx);
     setActivePresetId("pico_manana");
+    setSelectionMode("origin");
     triggerRouteCalculation(orig, dest, ctx);
     setFlyToLocation({ lat: -32.96, lon: -60.66, zoom: 13 });
   }, [triggerRouteCalculation]);
@@ -504,40 +425,41 @@ export const App: React.FC = () => {
   const handleQuickRouteTSP = useCallback(() => {
     setAppMode("tour");
     const dep: NodeInfo = {
-      id: 1001,
+      id: 0,
       lat: -32.9377,
       lon: -60.6728,
       label: "Depósito Central (Terminal de Ómnibus)",
     };
     const stps: NodeInfo[] = [
       {
-        id: 1003,
+        id: 0,
         lat: -32.9554,
         lon: -60.6558,
         label: "Cliente 1 · Pellegrini y Corrientes",
       },
       {
-        id: 1002,
+        id: 0,
         lat: -32.9475,
         lon: -60.6305,
         label: "Cliente 2 · Monumento a la Bandera",
       },
       {
-        id: 1004,
+        id: 0,
         lat: -32.9468,
         lon: -60.6393,
         label: "Cliente 3 · Bv. Oroño y Córdoba",
       },
       {
-        id: 1007,
+        id: 0,
         lat: -32.943,
         lon: -60.665,
-        label: "Cliente 4 · Echesortu (Santa Fe y Avellaneda)",
+        label: "Cliente 4 · Santa Fe y Avellaneda",
       },
     ];
     setDepot(dep);
     setStops(stps);
     setReturnToDepot(true);
+    setSelectionMode("stop");
     triggerTourOptimization(dep, stps, true, context);
     setFlyToLocation({ lat: -32.945, lon: -60.655, zoom: 13 });
   }, [context, triggerTourOptimization]);
@@ -550,6 +472,7 @@ export const App: React.FC = () => {
     setStops([]);
     setRouteResult(null);
     setTourResult(null);
+    setRouteError(null);
     setSelectionMode(appMode === "route" ? "origin" : "depot");
   }, [appMode]);
 
@@ -579,231 +502,283 @@ export const App: React.FC = () => {
         onViewportStatsChange={setViewportStats}
       />
 
-      {/* Barra Lateral Flotante de Control (Left Drawer) */}
-      <aside className="pointer-events-auto absolute left-4 top-4 bottom-4 z-[500] flex w-96 flex-col gap-2.5 overflow-y-auto pr-1">
-        {/* Cabecera Principal de la App */}
-        <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
-              <Navigation className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold tracking-tight text-white">
-                Rosario Last-Mile Router
-              </h1>
-              <p className="text-[11px] text-slate-400">
-                {viewportStats
-                  ? `${viewportStats.totalEdges.toLocaleString()} tramos · ${viewportStats.executionTimeMs.toFixed(0)} ms`
-                  : "13.134 esquinas · Árbol CART + Dijkstra"}
-              </p>
-            </div>
-          </div>
+      {/* Botón flotante para reabrir el panel cuando está oculto */}
+      {!isSidebarOpen && (
+        <div className="pointer-events-auto absolute left-4 top-4 z-[500] flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/95 px-3.5 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-emerald-500/50 hover:bg-slate-800"
+            title="Mostrar panel de control"
+          >
+            <PanelLeftOpen className="h-4 w-4 text-emerald-400" />
+            <span>Mostrar Controles</span>
+          </button>
 
           <button
             type="button"
             onClick={() => setIsBenchmarkOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/90 px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-emerald-500/50 hover:bg-slate-700 hover:text-white"
-            title="Abrir auditoría científica de Machine Learning"
-            data-testid="open-benchmark-btn"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2.5 text-xs font-semibold text-slate-200 shadow-2xl backdrop-blur-md transition hover:border-emerald-500/50 hover:bg-slate-800"
           >
-            <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Auditoría</span>
+            <BarChart3 className="h-4 w-4 text-emerald-400" />
+            <span>Auditoría ML</span>
           </button>
         </div>
+      )}
 
-        {/* 3 Atajos de Rutas Rápidas */}
-        <div className="flex flex-col gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/95 p-2.5 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            <span className="flex items-center gap-1 text-amber-400">
-              <Zap className="h-3 w-3" />
-              <span>Rutas Rápidas de Demostración</span>
-            </span>
-            <span className="text-[9px] text-emerald-400 font-mono">1 CLIC</span>
+      {/* Barra Lateral Flotante de Control (Ocultable y Simplificada) */}
+      {isSidebarOpen && (
+        <aside className="pointer-events-auto absolute left-4 top-4 bottom-4 z-[500] flex w-96 flex-col gap-2.5 overflow-y-auto pr-1">
+          {/* 1. Cabecera Principal con botón de Ocultar Panel */}
+          <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+                <Navigation className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold tracking-tight text-white">
+                  Rosario Last-Mile Router
+                </h1>
+                <p className="text-[11px] text-slate-400">
+                  {viewportStats
+                    ? `${viewportStats.totalEdges.toLocaleString()} cuadras · ${viewportStats.executionTimeMs.toFixed(0)} ms`
+                    : "13.134 esquinas · Árbol CART + Dijkstra"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsBenchmarkOpen(true)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/90 px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-emerald-500/50 hover:bg-slate-700 hover:text-white"
+                title="Abrir auditoría científica de Machine Learning"
+                data-testid="open-benchmark-btn"
+              >
+                <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Auditoría</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen(false)}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-800/90 p-1.5 text-slate-300 transition hover:border-slate-600 hover:bg-slate-700 hover:text-white"
+                title="Ocultar panel lateral para ver el mapa completo"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-1.5 text-left">
-            <button
-              type="button"
-              onClick={handleQuickRoutePellegrini}
-              data-testid="quick-route-pellegrini"
-              className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
-              title="Pellegrini ➔ Monumento (Desvío inteligente por congestión severa)"
-            >
-              <div className="flex items-center gap-1 text-amber-400 text-xs">
-                <Zap className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-bold text-[11px] text-slate-200">
-                  Pellegrini
+
+          {/* 2. Selección de Puntos en el Mapa (Origen y Destino) */}
+          {appMode === "route" && (
+            <div className="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-semibold text-slate-200">
+                  📍 Seleccioná 2 esquinas haciendo clic en el mapa
                 </span>
+                {(origin || destination) && (
+                  <button
+                    type="button"
+                    onClick={handleResetPoints}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-400 hover:text-rose-300"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    <span>Borrar</span>
+                  </button>
+                )}
               </div>
-              <div className="text-[10px] text-slate-400 mt-1 leading-tight">
-                ➔ Monumento
-              </div>
-              <div className="mt-1 text-[9px] text-emerald-400 font-medium">
-                Evita colapso
-              </div>
-            </button>
 
-            <button
-              type="button"
-              onClick={handleQuickRouteCircunvalacion}
-              data-testid="quick-route-circunvalacion"
-              className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
-              title="Circunvalación ➔ Microcentro (Acceso perimetral rápido)"
-            >
-              <div className="flex items-center gap-1 text-sky-400 text-xs">
-                <Car className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-bold text-[11px] text-slate-200">
-                  Circunval.
-                </span>
-              </div>
-              <div className="text-[10px] text-slate-400 mt-1 leading-tight">
-                ➔ Centro
-              </div>
-              <div className="mt-1 text-[9px] text-sky-400 font-medium">
-                Perimetral
-              </div>
-            </button>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExplicitSelectionButton(true);
+                    setSelectionMode("origin");
+                  }}
+                  data-testid="select-origin-btn"
+                  className={`flex items-center gap-2 rounded-xl border p-2.5 text-left transition ${
+                    selectionMode === "origin"
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-200 shadow-md"
+                      : "border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700"
+                  }`}
+                >
+                  <MapPin className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                      1. Origen (Verde)
+                    </div>
+                    <div className="truncate font-medium text-white">
+                      {origin ? origin.label : "Clic en el mapa..."}
+                    </div>
+                  </div>
+                </button>
 
-            <button
-              type="button"
-              onClick={handleQuickRouteTSP}
-              data-testid="quick-route-tsp"
-              className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
-              title="Ronda 4 Clientes (TSP 2-opt con retorno a depósito)"
-            >
-              <div className="flex items-center gap-1 text-purple-400 text-xs">
-                <Package className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-bold text-[11px] text-slate-200">
-                  4 Clientes
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExplicitSelectionButton(true);
+                    setSelectionMode("destination");
+                  }}
+                  data-testid="select-dest-btn"
+                  className={`flex items-center gap-2 rounded-xl border p-2.5 text-left transition ${
+                    selectionMode === "destination"
+                      ? "border-rose-500 bg-rose-500/20 text-rose-200 shadow-md"
+                      : "border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700"
+                  }`}
+                >
+                  <MapPin className="h-4 w-4 shrink-0 text-rose-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-rose-400">
+                      2. Destino (Rojo)
+                    </div>
+                    <div className="truncate font-medium text-white">
+                      {destination ? destination.label : "Clic en el mapa..."}
+                    </div>
+                  </div>
+                </button>
               </div>
-              <div className="text-[10px] text-slate-400 mt-1 leading-tight">
-                TSP 2-opt
-              </div>
-              <div className="mt-1 text-[9px] text-purple-300 font-medium">
-                Logística
-              </div>
-            </button>
-          </div>
-        </div>
 
-        {/* Buscador de Esquinas en Tiempo Real */}
-        <StreetSearch
-          onSelectCorner={(node, mode) => {
-            handleNodeSelected(node, mode);
-          }}
-          onFlyTo={(coords) => setFlyToLocation(coords)}
-        />
+              {/* Buscador opcional por nombre de calle */}
+              <StreetSearch
+                onSelectCorner={(node, mode) => {
+                  setExplicitSelectionButton(true);
+                  handleNodeSelected(node, mode);
+                }}
+                onFlyTo={(coords) => setFlyToLocation(coords)}
+              />
+            </div>
+          )}
 
-        {/* Selector de Puntos en Modo Ruta A -> B */}
-        {appMode === "route" && (
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setSelectionMode("origin")}
-              data-testid="select-origin-btn"
-              className={`flex items-center gap-2 rounded-xl border p-2 text-left transition ${
-                selectionMode === "origin"
-                  ? "border-emerald-500 bg-emerald-500/20 text-emerald-200 shadow-md"
-                  : "border-slate-800 bg-slate-900/90 text-slate-300 hover:border-slate-700"
-              }`}
-            >
-              <MapPin className="h-4 w-4 shrink-0 text-emerald-400" />
-              <div className="truncate">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400">
-                  Origen (Clic Mapa)
-                </div>
-                <div className="truncate font-semibold text-white">
-                  {origin ? origin.label : "Fijar esquina..."}
-                </div>
-              </div>
-            </button>
+          {/* Gestor de Paradas en Modo Ronda TSP */}
+          {appMode === "tour" && (
+            <StopsManager
+              depot={depot}
+              stops={stops}
+              selectionMode={selectionMode}
+              onSetSelectionMode={setSelectionMode}
+              onRemoveStop={(idx) => {
+                const updated = stops.filter((_, i) => i !== idx);
+                setStops(updated);
+              }}
+              onClearStops={() => {
+                setStops([]);
+                setTourResult(null);
+              }}
+              returnToDepot={returnToDepot}
+              onToggleReturnToDepot={() => setReturnToDepot((prev) => !prev)}
+              onOptimizeTour={() => {
+                if (depot) {
+                  triggerTourOptimization(depot, stops, returnToDepot, context);
+                }
+              }}
+              isCalculating={isCalculating}
+              tourResult={tourResult}
+            />
+          )}
 
-            <button
-              type="button"
-              onClick={() => setSelectionMode("destination")}
-              data-testid="select-dest-btn"
-              className={`flex items-center gap-2 rounded-xl border p-2 text-left transition ${
-                selectionMode === "destination"
-                  ? "border-rose-500 bg-rose-500/20 text-rose-200 shadow-md"
-                  : "border-slate-800 bg-slate-900/90 text-slate-300 hover:border-slate-700"
-              }`}
-            >
-              <MapPin className="h-4 w-4 shrink-0 text-rose-400" />
-              <div className="truncate">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400">
-                  Destino (Clic Mapa)
-                </div>
-                <div className="truncate font-semibold text-white">
-                  {destination ? destination.label : "Fijar esquina..."}
-                </div>
-              </div>
-            </button>
-          </div>
-        )}
+          {routeError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-950/60 p-3 text-xs text-rose-200">
+              {routeError}
+            </div>
+          )}
 
-        {/* Gestor de Paradas en Modo Ronda TSP */}
-        {appMode === "tour" && (
-          <StopsManager
-            depot={depot}
-            stops={stops}
-            selectionMode={selectionMode}
-            onSetSelectionMode={setSelectionMode}
-            onRemoveStop={(idx) => {
-              const updated = stops.filter((_, i) => i !== idx);
-              setStops(updated);
-            }}
-            onClearStops={() => {
-              setStops([]);
-              setTourResult(null);
-            }}
-            returnToDepot={returnToDepot}
-            onToggleReturnToDepot={() => setReturnToDepot((prev) => !prev)}
-            onOptimizeTour={() => {
-              if (depot) {
-                triggerTourOptimization(depot, stops, returnToDepot, context);
-              }
-            }}
-            isCalculating={isCalculating}
+          {/* 3. Tarjeta de Métricas y Comparación (aparece cuando hay ruta calculada) */}
+          <MetricsCard
+            routeResult={routeResult}
             tourResult={tourResult}
+            appMode={appMode}
+            isCalculating={isCalculating}
+            onClear={handleResetPoints}
           />
-        )}
 
-        {/* Monitor Top Arterias Colapsadas de Rosario */}
-        <CongestionMonitor
-          context={context}
-          onSelectCorridor={(corridor: CongestedCorridor) => {
-            setFlyToLocation({ lat: corridor.lat, lon: corridor.lon, zoom: 15 });
-          }}
-        />
+          {/* 4. Panel de Control Contextual (Hora, Día, Clima y Capas siempre visibles) */}
+          <ControlPanel
+            context={context}
+            onContextChange={handleContextChange}
+            activePresetId={activePresetId}
+            onApplyPreset={handleApplyPreset}
+            presets={presets}
+            appMode={appMode}
+            onAppModeChange={handleAppModeChange}
+            showTrafficLayer={showTrafficLayer}
+            onToggleTrafficLayer={() => setShowTrafficLayer((p) => !p)}
+            showStaticRoute={showStaticRoute}
+            onToggleStaticRoute={() => setShowStaticRoute((p) => !p)}
+            showDynamicRoute={showDynamicRoute}
+            onToggleDynamicRoute={() => setShowDynamicRoute((p) => !p)}
+            isCalculating={isCalculating}
+            onResetPoints={handleResetPoints}
+            onUseCurrentTime={handleUseCurrentTime}
+          />
 
-        {/* Tarjeta de Métricas y Ahorro de Tiempo */}
-        <MetricsCard
-          routeResult={routeResult}
-          tourResult={tourResult}
-          appMode={appMode}
-          isCalculating={isCalculating}
-          onClear={handleResetPoints}
-        />
+          {/* 5. Ejemplos Rápidos de Demostración (1 Clic, compactos al pie) */}
+          <div className="flex flex-col gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/95 p-2.5 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <span className="flex items-center gap-1 text-amber-400">
+                <Zap className="h-3 w-3" />
+                <span>Ejemplos de Ruta Prearmados (Opcional)</span>
+              </span>
+              <span className="text-[9px] text-emerald-400 font-mono">1 CLIC</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 text-left">
+              <button
+                type="button"
+                onClick={handleQuickRoutePellegrini}
+                data-testid="quick-route-pellegrini"
+                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
+                title="Pellegrini ➔ Monumento (Hora pico con tormenta)"
+              >
+                <div className="flex items-center gap-1 text-amber-400 text-xs">
+                  <Zap className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-bold text-[11px] text-slate-200">
+                    Pellegrini
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                  ➔ Monumento
+                </div>
+              </button>
 
-        {/* Panel de Control Contextual y Presets */}
-        <ControlPanel
-          context={context}
-          onContextChange={handleContextChange}
-          activePresetId={activePresetId}
-          onApplyPreset={handleApplyPreset}
-          presets={presets}
-          appMode={appMode}
-          onAppModeChange={handleAppModeChange}
-          showTrafficLayer={showTrafficLayer}
-          onToggleTrafficLayer={() => setShowTrafficLayer((p) => !p)}
-          showStaticRoute={showStaticRoute}
-          onToggleStaticRoute={() => setShowStaticRoute((p) => !p)}
-          showDynamicRoute={showDynamicRoute}
-          onToggleDynamicRoute={() => setShowDynamicRoute((p) => !p)}
-          isCalculating={isCalculating}
-          onResetPoints={handleResetPoints}
-        />
-      </aside>
+              <button
+                type="button"
+                onClick={handleQuickRouteCircunvalacion}
+                data-testid="quick-route-circunvalacion"
+                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
+                title="Circunvalación ➔ Microcentro (Acceso perimetral rápido)"
+              >
+                <div className="flex items-center gap-1 text-sky-400 text-xs">
+                  <Car className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-bold text-[11px] text-slate-200">
+                    Circunval.
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                  ➔ Centro
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleQuickRouteTSP}
+                data-testid="quick-route-tsp"
+                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
+                title="Ronda 4 Clientes (TSP 2-opt con retorno a depósito)"
+              >
+                <div className="flex items-center gap-1 text-purple-400 text-xs">
+                  <Package className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-bold text-[11px] text-slate-200">
+                    4 Clientes
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                  TSP 2-opt
+                </div>
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* Modal de Auditoría y Benchmark Científico */}
       <BenchmarkModal

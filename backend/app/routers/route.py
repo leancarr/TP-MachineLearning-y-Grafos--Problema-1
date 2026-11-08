@@ -32,12 +32,7 @@ def _resolve_node(
     role: str = "Punto",
 ) -> NodeInfo:
     """Resuelve un nodo por su ID directo o mediante snapping cKDTree desde (lat, lon)."""
-    if node_id is not None:
-        if node_id not in state.spatial_index.node_by_id:
-            raise HTTPException(
-                status_code=404,
-                detail=f"{role}: el ID de nodo {node_id} no existe en la red de Rosario.",
-            )
+    if node_id is not None and node_id in state.spatial_index.node_by_id:
         node = state.spatial_index.node_by_id[node_id]
         return NodeInfo(
             id=int(node["id"]),
@@ -55,6 +50,12 @@ def _resolve_node(
             lon=nearest["lon"],
             label=nearest["label"],
             distance_m=nearest["distance_m"],
+        )
+
+    if node_id is not None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{role}: el ID de nodo {node_id} no existe en la red de Rosario.",
         )
 
     raise HTTPException(

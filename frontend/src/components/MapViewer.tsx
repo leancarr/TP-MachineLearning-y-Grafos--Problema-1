@@ -82,7 +82,6 @@ const DEFAULT_SAFE_CONTEXT: ContextParams = {
 const ViewportController: React.FC<ViewportControllerProps> = ({
   context = DEFAULT_SAFE_CONTEXT,
   showTrafficLayer,
-  selectionMode,
   onEdgesLoaded,
   onLoadingChange,
   onMapClickNode,
@@ -156,9 +155,7 @@ const ViewportController: React.FC<ViewportControllerProps> = ({
       triggerViewportFetch();
     },
     click: (e) => {
-      if (selectionMode) {
-        onMapClickNode(e.latlng.lat, e.latlng.lng);
-      }
+      onMapClickNode(e.latlng.lat, e.latlng.lng);
     },
   });
 
@@ -244,11 +241,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
   const handleMapClickNode = useCallback(
     async (lat: number, lon: number) => {
-      if (!selectionMode || !onNodeSelected) return;
+      if (!onNodeSelected) return;
+      const effectiveMode: SelectionMode = selectionMode || "origin";
       setSnapping(true);
       try {
         const nearest = await fetchNearestNode(lat, lon);
-        onNodeSelected(nearest, selectionMode);
+        onNodeSelected(nearest, effectiveMode);
       } catch (err) {
         console.error("Error haciendo snap a esquina más cercana:", err);
       } finally {
@@ -321,6 +319,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 color: edge.color,
                 weight: getEdgeWeightByHierarchy(edge.jerarquia, zoom),
                 opacity: zoom >= 15 ? 0.78 : 0.68,
+              }}
+              eventHandlers={{
+                click: (e) => {
+                  L.DomEvent.stopPropagation(e);
+                  handleMapClickNode(e.latlng.lat, e.latlng.lng);
+                },
               }}
             >
               <Tooltip sticky direction="top" className="text-xs">
@@ -482,6 +486,48 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       </MapContainer>
 
+      {/* Top-center Interactive Click Helper Pill */}
+      <div className="pointer-events-none absolute left-1/2 top-4 z-[500] -translate-x-1/2">
+        <div className="flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/95 px-4 py-1.5 text-xs font-medium text-slate-100 shadow-xl backdrop-blur-md">
+          {(selectionMode || "origin") === "origin" && (
+            <>
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>
+                Hacé clic en el mapa para marcar el{" "}
+                <strong className="text-emerald-400">ORIGEN (Verde)</strong>
+              </span>
+            </>
+          )}
+          {selectionMode === "destination" && (
+            <>
+              <span className="h-2.5 w-2.5 rounded-full bg-rose-400 animate-pulse" />
+              <span>
+                Ahora hacé clic en el mapa para marcar el{" "}
+                <strong className="text-rose-400">DESTINO (Rojo)</strong>
+              </span>
+            </>
+          )}
+          {selectionMode === "depot" && (
+            <>
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse" />
+              <span>
+                Hacé clic en el mapa para fijar el{" "}
+                <strong className="text-blue-400">DEPÓSITO</strong>
+              </span>
+            </>
+          )}
+          {selectionMode === "stop" && (
+            <>
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />
+              <span>
+                Hacé clic en el mapa para agregar una{" "}
+                <strong className="text-amber-400">PARADA DE REPARTO</strong>
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Top-right HUD: Progressive LOD & Traffic Legend */}
       <div className="pointer-events-auto absolute right-4 top-4 z-[500] flex flex-col gap-2 rounded-xl border border-slate-800/90 bg-slate-900/90 p-3.5 text-xs text-slate-200 shadow-2xl backdrop-blur-md">
         <div className="flex items-center justify-between gap-4">
@@ -522,6 +568,21 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
             <span>Congestionado</span>
+          </div>
+        </div>
+
+        <div className="mt-1 flex flex-col gap-1 border-t border-slate-800 pt-2 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-1 w-5 rounded bg-emerald-500" />
+            <span className="text-emerald-300 font-medium">
+              Línea Verde sólida: Ruta IA (Más rápida por calles)
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-0.5 w-5 border-b-2 border-dashed border-blue-400" />
+            <span className="text-blue-300 font-medium">
+              Línea Azul punteada: Ruta Clásica (Menor distancia)
+            </span>
           </div>
         </div>
       </div>

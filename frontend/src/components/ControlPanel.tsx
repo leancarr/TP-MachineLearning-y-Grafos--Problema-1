@@ -37,6 +37,7 @@ export interface ControlPanelProps {
   onToggleDynamicRoute: () => void;
   isCalculating?: boolean;
   onResetPoints?: () => void;
+  onUseCurrentTime?: () => void;
 }
 
 const DIAS: { key: DiaSemanaType; label: string }[] = [
@@ -79,6 +80,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onToggleDynamicRoute,
   isCalculating,
   onResetPoints,
+  onUseCurrentTime,
 }) => {
   const isRushHour =
     !context.es_feriado &&
@@ -140,68 +142,28 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </button>
       </div>
 
-      {/* Presets de 1 Clic */}
-      <div>
-        <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          <span className="flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-amber-400" />
-            <span>Escenarios Urbanos (1 Clic)</span>
-          </span>
-          {activePresetId && (
-            <span className="text-[10px] text-emerald-400">Activo</span>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {presetsLoading ? (
-            <div className="col-span-2 py-2 text-center text-xs text-slate-500 animate-pulse">
-              Cargando escenarios urbanos...
-            </div>
-          ) : (
-            presets.map((preset) => {
-              const isSelected = activePresetId === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  disabled={isCalculating}
-                  onClick={() => onApplyPreset(preset)}
-                  data-testid={`preset-${preset.id}`}
-                  className={`flex items-center gap-1.5 rounded-lg border p-1.5 text-left text-xs transition ${
-                    isCalculating ? "opacity-60 cursor-not-allowed" : ""
-                  } ${
-                    isSelected
-                      ? "border-emerald-500 bg-emerald-500/15 text-emerald-200 shadow-sm"
-                      : "border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800/60"
-                  }`}
-                  title={preset.description}
-                >
-                  <span className="text-sm shrink-0">{preset.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-semibold leading-tight text-slate-100">
-                      {preset.name}
-                    </div>
-                    <div className="text-[10px] text-slate-400 leading-tight">
-                      {preset.time_label}
-                    </div>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
       {/* Slider de Hora Continua */}
       <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
-
         <div className="mb-2 flex items-center justify-between">
-          <label
-            htmlFor="hora-slider"
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-300"
-          >
-            <Clock className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Hora del Día</span>
-          </label>
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="hora-slider"
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-300"
+            >
+              <Clock className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Hora del Día</span>
+            </label>
+            {onUseCurrentTime && (
+              <button
+                type="button"
+                onClick={onUseCurrentTime}
+                className="rounded border border-slate-700 bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 transition hover:border-emerald-500/50 hover:bg-slate-700"
+                title="Sincronizar con la hora y día actuales de tu sistema operativo"
+              >
+                Hora actual
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-1.5">
             {isRushHour && (
               <span className="flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
@@ -229,16 +191,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-emerald-500 focus:outline-none"
         />
         <div className="mt-1 flex justify-between text-[10px] text-slate-500">
-          <span>00:00 (Noche)</span>
+          <span>00:00</span>
           <span>08:00 (Pico)</span>
-          <span>13:00 (Valle)</span>
+          <span>13:00</span>
           <span>18:30 (Pico)</span>
           <span>23:30</span>
         </div>
       </div>
 
       {/* Día de la Semana y Feriado */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <Calendar className="h-3 w-3 text-slate-400" />
@@ -259,7 +221,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 context.es_feriado ? "bg-amber-400 animate-pulse" : "bg-slate-600"
               }`}
             />
-            <span>Feriado</span>
+            <span>Es Feriado</span>
           </button>
         </div>
         <div className="grid grid-cols-7 gap-1">
@@ -317,7 +279,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400">
           <span className="flex items-center gap-1">
             <Layers className="h-3 w-3 text-emerald-400" />
-            <span>Capas & Trazado Dual</span>
+            <span>Capas del Mapa</span>
           </span>
           {onResetPoints && (
             <button
@@ -327,7 +289,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               title="Limpiar puntos y rutas del mapa"
             >
               <RotateCcw className="h-2.5 w-2.5" />
-              <span>Limpiar</span>
+              <span>Limpiar Ruta</span>
             </button>
           )}
         </div>
@@ -385,6 +347,57 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             />
             <span>Ruta Metros</span>
           </button>
+        </div>
+      </div>
+
+      {/* Presets Rápidos (Opcional) */}
+      <div className="border-t border-slate-800/80 pt-2">
+        <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <span className="flex items-center gap-1">
+            <Sparkles className="h-3 w-3 text-amber-400" />
+            <span>Presets de Clima y Hora (Opcional)</span>
+          </span>
+          {activePresetId && (
+            <span className="text-[10px] text-emerald-400">Activo</span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {presetsLoading ? (
+            <div className="col-span-2 py-2 text-center text-xs text-slate-500 animate-pulse">
+              Cargando escenarios urbanos...
+            </div>
+          ) : (
+            presets.map((preset) => {
+              const isSelected = activePresetId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  disabled={isCalculating}
+                  onClick={() => onApplyPreset(preset)}
+                  data-testid={`preset-${preset.id}`}
+                  className={`flex items-center gap-1.5 rounded-lg border p-1.5 text-left text-xs transition ${
+                    isCalculating ? "opacity-60 cursor-not-allowed" : ""
+                  } ${
+                    isSelected
+                      ? "border-emerald-500 bg-emerald-500/15 text-emerald-200 shadow-sm"
+                      : "border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800/60"
+                  }`}
+                  title={preset.description}
+                >
+                  <span className="text-sm shrink-0">{preset.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-semibold leading-tight text-slate-100">
+                      {preset.name}
+                    </div>
+                    <div className="text-[10px] text-slate-400 leading-tight">
+                      {preset.time_label}
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
     </div>
