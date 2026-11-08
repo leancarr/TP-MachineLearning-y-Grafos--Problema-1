@@ -1,0 +1,75 @@
+{
+  "model_name": "DecisionTreeRegressor",
+  "hyperparameters": {
+    "max_depth": 16,
+    "min_samples_leaf": 10,
+    "random_state": 42
+  },
+  "train_metrics": {
+    "mae_seg": 1.3509,
+    "rmse_seg": 4.5825,
+    "r2_score": 0.8935
+  },
+  "test_metrics": {
+    "mae_seg": 1.4949,
+    "rmse_seg": 4.1565,
+    "r2_score": 0.899
+  },
+  "overfitting_gap_r2": 0.0055,
+  "train_time_sec": 0.773,
+  "inference_1k_ms": 0.731,
+  "feature_importances": [
+    {
+      "feature": "longitud_m",
+      "importance_pct": 76.01
+    },
+    {
+      "feature": "clima_tormenta",
+      "importance_pct": 5.53
+    },
+    {
+      "feature": "hora_dia",
+      "importance_pct": 3.95
+    },
+    {
+      "feature": "clima_lluvia",
+      "importance_pct": 3.4
+    },
+    {
+      "feature": "velocidad_promedio_historica",
+      "importance_pct": 3.15
+    },
+    {
+      "feature": "tipo_calle_circunvalacion",
+      "importance_pct": 1.88
+    },
+    {
+      "feature": "tipo_calle_comercial",
+      "importance_pct": 1.86
+    },
+    {
+      "feature": "tipo_calle_residencial",
+      "importance_pct": 1.61
+    },
+    {
+      "feature": "tipo_calle_avenida",
+      "importance_pct": 1.23
+    },
+    {
+      "feature": "dia_semana_sabado",
+      "importance_pct": 0.45
+    },
+    {
+      "feature": "dia_semana_domingo",
+      "importance_pct": 0.43
+    },
+    {
+      "feature": "jerarquia_osm",
+      "importance_pct": 0.24
+    },
+    {
+      "feature": "es_feriado",
+      "importance_pct": 0.16
+    }
+  ]
+}
