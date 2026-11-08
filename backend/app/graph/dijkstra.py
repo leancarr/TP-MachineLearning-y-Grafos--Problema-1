@@ -269,6 +269,70 @@ class DijkstraRouter:
             execution_time_ms=round(elapsed_ms, 3),
         )
 
+    def one_to_many(
+        self, source: int, targets: set[int] | list[int], mode: str = "dynamic"
+    ) -> dict[int, float]:
+        """
+        Calcula los costos mínimos desde `source` hacia un conjunto acotado de nodos `targets`
+        con corte temprano (early exit) en cuanto se visitaron todos los targets buscados.
+        Permite construir la submatriz K x K de TSP en <100 ms.
+        """
+        if mode not in ("dynamic", "static"):
+            raise ValueError(
+                f"Modo de ruteo inválido: '{mode}'. Valores válidos: 'dynamic' o 'static'."
+            )
+
+        source_idx = self.node_to_idx.get(source)
+        if source_idx is None:
+            return {}
+
+        target_indices = {
+            self.node_to_idx[t] for t in targets if t in self.node_to_idx
+        }
+        target_indices.discard(source_idx)
+        if not target_indices:
+            return {source: 0.0}
+
+        weights = (
+            memoryview(self.graph.dynamic_weights)
+            if mode == "dynamic"
+            else self.static_weights_mv
+        )
+
+        n = self.n_nodes
+        dist = [float("inf")] * n
+        dist[source_idx] = 0.0
+
+        heappop = heapq.heappop
+        heappush = heapq.heappush
+        adj = self.compact_adj
+        remaining = len(target_indices)
+
+        heap: list[tuple[float, int]] = [(0.0, source_idx)]
+
+        while heap:
+            d, u = heappop(heap)
+            if dist[u] < d:
+                continue
+
+            if u in target_indices:
+                remaining -= 1
+                if remaining == 0:
+                    break
+
+            for v, edge_idx in adj[u]:
+                new_d = d + weights[edge_idx]
+                if new_d < dist[v]:
+                    dist[v] = new_d
+                    heappush(heap, (new_d, v))
+
+        idx_to_node = self.idx_to_node
+        result = {source: 0.0}
+        for t_idx in target_indices:
+            if dist[t_idx] < float("inf"):
+                result[idx_to_node[t_idx]] = dist[t_idx]
+        return result
+
     def one_to_all(
         self, source: int, mode: str = "dynamic"
     ) -> tuple[dict[int, float], dict[int, int]]:
