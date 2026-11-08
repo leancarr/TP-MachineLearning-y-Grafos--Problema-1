@@ -5,6 +5,10 @@ from backend.app.ml.decision_tree import (
     evaluate_regression,
 )
 from backend.app.ml.generator import generate_trips_dataset
+from backend.app.ml.predictor import (
+    NetworkTravelTimePredictor,
+    get_global_predictor,
+)
 from backend.app.ml.preprocessor import (
     TrafficDataPreprocessor,
     load_dataset_and_split,
@@ -16,5 +20,8 @@ __all__ = [
     "generate_trips_dataset",
     "TrafficDataPreprocessor",
     "load_dataset_and_split",
+    "NetworkTravelTimePredictor",
+    "get_global_predictor",
 ]
+
 
