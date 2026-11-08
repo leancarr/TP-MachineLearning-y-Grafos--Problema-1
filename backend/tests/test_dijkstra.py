@@ -270,3 +270,65 @@ def test_dijkstra_one_to_all_matrix_helper(
     assert len(distances) == len(shared_graph.nodes)  # SCC completo
     assert distances[u_start] == 0.0
     assert elapsed_ms < 80.0
+
+
+def test_dijkstra_50_random_pairs_exact_match_vs_networkx(
+    shared_graph: DirectedAdjacencyGraph,
+) -> None:
+    """
+    Ticket 13 (MACHI-20): Suite TDD de 50 pares aleatorios Origen-Destino en la red real
+    de Rosario contrastando DijkstraRouter contra `networkx.dijkstra_path` y
+    `networkx.dijkstra_path_length`, verificando:
+    1) Igualdad exacta de costo al centésimo (tanto en modo dinámico como estático).
+    2) Igualdad de secuencia de nodos y validez de cada arista dirigida (sin viajar en contramano).
+    """
+    import networkx as nx
+    import numpy as np
+
+    router = DijkstraRouter(shared_graph)
+
+    # Construir el DiGraph equivalente en NetworkX con pesos estáticos y dinámicos
+    G_nx = nx.DiGraph()
+    for n in shared_graph.nodes:
+        G_nx.add_node(int(n["id"]))
+
+    for idx, e in enumerate(shared_graph.edges):
+        u = int(e["u"])
+        v = int(e["v"])
+        G_nx.add_edge(
+            u,
+            v,
+            static_w=float(shared_graph.static_lengths[idx]),
+            dynamic_w=float(shared_graph.dynamic_weights[idx]),
+        )
+
+    rng = np.random.default_rng(42)
+    all_node_ids = [int(n["id"]) for n in shared_graph.nodes]
+    origins = rng.choice(all_node_ids, size=50, replace=False)
+    destinations = rng.choice(all_node_ids, size=50, replace=False)
+
+    for u_orig, v_dest in zip(origins, destinations):
+        u_int, v_int = int(u_orig), int(v_dest)
+
+        # Contrastar modo dinámico (tiempo en segundos)
+        res_dyn = router.shortest_path(u_int, v_int, mode="dynamic")
+        nx_len_dyn = float(nx.dijkstra_path_length(G_nx, u_int, v_int, weight="dynamic_w"))
+        nx_path_dyn = nx.dijkstra_path(G_nx, u_int, v_int, weight="dynamic_w")
+
+        assert res_dyn.found is True
+        assert round(res_dyn.total_time_sec, 2) == round(nx_len_dyn, 2)
+        assert res_dyn.nodes == nx_path_dyn
+
+        # Verificar que ninguna arista del camino viaje en contramano
+        for a, b in zip(res_dyn.nodes[:-1], res_dyn.nodes[1:]):
+            assert (a, b) in shared_graph.edge_by_pair, f"Arista en contramano detectada: ({a} -> {b})"
+
+        # Contrastar modo estático (distancia en metros)
+        res_stat = router.shortest_path(u_int, v_int, mode="static")
+        nx_len_stat = float(nx.dijkstra_path_length(G_nx, u_int, v_int, weight="static_w"))
+        nx_path_stat = nx.dijkstra_path(G_nx, u_int, v_int, weight="static_w")
+
+        assert res_stat.found is True
+        assert round(res_stat.total_distance_m, 2) == round(nx_len_stat, 2)
+        assert res_stat.nodes == nx_path_stat
+
