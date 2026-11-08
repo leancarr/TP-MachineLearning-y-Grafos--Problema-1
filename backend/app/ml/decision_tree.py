@@ -145,6 +145,8 @@ class TrafficDecisionTreeTrainer:
         out_model.parent.mkdir(parents=True, exist_ok=True)
 
         joblib.dump(self.model, out_model)
+        if self.preprocessor is not None:
+            self.preprocessor.save()
         with open(out_metrics, "w", encoding="utf-8") as f:
             json.dump(self.metrics_, f, indent=2, ensure_ascii=False)
 
