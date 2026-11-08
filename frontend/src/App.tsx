@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
-import { MapPin, Navigation, Activity, Layers } from "lucide-react";
+import { MapPin, Navigation, Activity, Layers, BarChart3 } from "lucide-react";
 import MapViewer, { SelectionMode, ViewportStats } from "./components/MapViewer";
+import BenchmarkModal from "./components/BenchmarkModal";
 import { ContextParams, NodeInfo, RouteResponse, TourResponse } from "./types";
 import { calculateRouteComparison } from "./services/api";
 
@@ -23,6 +24,7 @@ export const App: React.FC = () => {
   const [showTrafficLayer, setShowTrafficLayer] = useState<boolean>(true);
   const [viewportStats, setViewportStats] = useState<ViewportStats | null>(null);
   const [calculatingRoute, setCalculatingRoute] = useState<boolean>(false);
+  const [isBenchmarkOpen, setIsBenchmarkOpen] = useState<boolean>(false);
 
   const handleNodeSelected = useCallback(
     async (node: NodeInfo, mode: SelectionMode) => {
@@ -101,19 +103,32 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowTrafficLayer((prev) => !prev)}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
-              showTrafficLayer
-                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                : "border-slate-700 bg-slate-800 text-slate-400"
-            }`}
-            title="Alternar capa de congestión ML"
-          >
-            <Layers className="h-3.5 w-3.5" />
-            <span>Capa ML</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsBenchmarkOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/90 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-emerald-500/50 hover:bg-slate-700 hover:text-white"
+              title="Abrir auditoría y benchmark científico de modelos"
+              data-testid="open-benchmark-btn"
+            >
+              <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Auditoría ML</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowTrafficLayer((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                showTrafficLayer
+                  ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                  : "border-slate-700 bg-slate-800 text-slate-400"
+              }`}
+              title="Alternar capa de congestión ML"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Capa ML</span>
+            </button>
+          </div>
         </div>
 
         {/* Click Selection Mode Indicator */}
@@ -193,6 +208,12 @@ export const App: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Benchmark & Machine Learning Audit Modal */}
+      <BenchmarkModal
+        isOpen={isBenchmarkOpen}
+        onClose={() => setIsBenchmarkOpen(false)}
+      />
     </div>
   );
 };
