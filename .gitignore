@@ -23,3 +23,13 @@ GEMINI.md
 cache/
 backend/app/data/*.csv
 backend/app/data/*.joblib
+
+# Private docs and local workspace files
+docs/defensa_oral_maestra.md
+.agents/
+skills/
+skills-lock.json
+*.pdf
+Scrapling/
+PLAN_TP_ROSARIO*.md
+
