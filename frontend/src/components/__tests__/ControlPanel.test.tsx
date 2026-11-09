@@ -243,19 +243,31 @@ describe("ControlPanel Component", () => {
     expect(hourInput.value).toBe("08");
     expect(minInput.value).toBe("00");
 
-    // Borrar y tipear '1': no debe forzar '01' de golpe para permitir tipear '16'
+    // Caso real de usuario: campo tenía '08' y tipea '1' sin borrar (DOM recibe '081')
     fireEvent.focus(hourInput);
-    fireEvent.change(hourInput, { target: { value: "1" } });
+    fireEvent.change(hourInput, { target: { value: "081" } });
     expect(hourInput.value).toBe("1");
 
-    // Completar con '16'
+    // Completa con '16'
     fireEvent.change(hourInput, { target: { value: "16" } });
     expect(hourInput.value).toBe("16");
     expect(handleContextChange).toHaveBeenCalledWith(
       expect.objectContaining({ hora_dia: 16 })
     );
 
-    // Si tipeamos '3', al ser >= 3 se formatea inmediatamente como '03'
+    // Minutos: campo tenía '00' y tipea '3' sin borrar (DOM recibe '003')
+    fireEvent.focus(minInput);
+    fireEvent.change(minInput, { target: { value: "003" } });
+    expect(minInput.value).toBe("3");
+
+    // Completa con '30'
+    fireEvent.change(minInput, { target: { value: "30" } });
+    expect(minInput.value).toBe("30");
+    expect(handleContextChange).toHaveBeenCalledWith(
+      expect.objectContaining({ hora_dia: 16.5 })
+    );
+
+    // Si tipeamos '3' en hora, al ser >= 3 se formatea inmediatamente como '03'
     fireEvent.change(hourInput, { target: { value: "3" } });
     expect(hourInput.value).toBe("03");
 
@@ -263,5 +275,67 @@ describe("ControlPanel Component", () => {
     fireEvent.focus(minInput);
     fireEvent.change(minInput, { target: { value: "" } });
     fireEvent.keyDown(minInput, { key: "Backspace" });
+  });
+
+  it("allows setting 16 hours cleanly even after toggling feriado", () => {
+    let currentCtx = { ...mockContext };
+    const handleContextChange = vi.fn((newCtx) => {
+      currentCtx = newCtx;
+    });
+
+    const { rerender } = render(
+      <ControlPanel
+        context={currentCtx}
+        onContextChange={handleContextChange}
+        activePresetId={null}
+        onApplyPreset={vi.fn()}
+        presets={mockPresets}
+        appMode="route"
+        onAppModeChange={vi.fn()}
+        showTrafficLayer={true}
+        onToggleTrafficLayer={vi.fn()}
+        showStaticRoute={true}
+        onToggleStaticRoute={vi.fn()}
+        showDynamicRoute={true}
+        onToggleDynamicRoute={vi.fn()}
+      />
+    );
+
+    // Toggle feriado
+    const feriadoBtn = screen.getByTestId("feriado-toggle");
+    fireEvent.click(feriadoBtn);
+    expect(handleContextChange).toHaveBeenCalledWith(
+      expect.objectContaining({ es_feriado: true })
+    );
+
+    // Re-render con nuevo contexto
+    rerender(
+      <ControlPanel
+        context={currentCtx}
+        onContextChange={handleContextChange}
+        activePresetId={null}
+        onApplyPreset={vi.fn()}
+        presets={mockPresets}
+        appMode="route"
+        onAppModeChange={vi.fn()}
+        showTrafficLayer={true}
+        onToggleTrafficLayer={vi.fn()}
+        showStaticRoute={true}
+        onToggleStaticRoute={vi.fn()}
+        showDynamicRoute={true}
+        onToggleDynamicRoute={vi.fn()}
+      />
+    );
+
+    const hourInput = screen.getByTestId("hour-input") as HTMLInputElement;
+    fireEvent.focus(hourInput);
+    fireEvent.change(hourInput, { target: { value: "081" } });
+    expect(hourInput.value).toBe("1");
+
+    fireEvent.change(hourInput, { target: { value: "16" } });
+    expect(hourInput.value).toBe("16");
+    expect(handleContextChange).toHaveBeenCalledWith(
+      expect.objectContaining({ hora_dia: 16, es_feriado: true })
+    );
   });
 });

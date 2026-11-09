@@ -96,13 +96,19 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const minInputRef = useRef<HTMLInputElement>(null);
   const isHourFocusedRef = useRef<boolean>(false);
   const isMinFocusedRef = useRef<boolean>(false);
+  const latestHourStrRef = useRef<string>(hourStr);
+  const latestMinStrRef = useRef<string>(minStr);
 
   useEffect(() => {
     if (!isHourFocusedRef.current && !isMinFocusedRef.current) {
       const h = Math.floor(context.hora_dia);
       const m = Math.round((context.hora_dia - h) * 60);
-      setHourStr(String(h).padStart(2, "0"));
-      setMinStr(String(m).padStart(2, "0"));
+      const hFormatted = String(h).padStart(2, "0");
+      const mFormatted = String(m).padStart(2, "0");
+      latestHourStrRef.current = hFormatted;
+      latestMinStrRef.current = mFormatted;
+      setHourStr(hFormatted);
+      setMinStr(mFormatted);
     }
   }, [context.hora_dia]);
 
@@ -133,6 +139,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
 
     const formattedH = String(hNum).padStart(2, "0");
     const formattedM = String(mNum).padStart(2, "0");
+    latestHourStrRef.current = formattedH;
+    latestMinStrRef.current = formattedM;
     setHourStr(formattedH);
     setMinStr(formattedM);
 
@@ -147,31 +155,63 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
 
   const handleHourInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, "");
+
+    // 1. Si el usuario borró todo
     if (raw === "") {
+      latestHourStrRef.current = "";
       setHourStr("");
       return;
     }
+
+    // 2. Si tenía 2 dígitos (ej: "08") y tipeó un 3er carácter (ej: "081" o "108")
+    if (raw.length > 2) {
+      const nativeEvent = e.nativeEvent as InputEvent | undefined;
+      const typedChar =
+        nativeEvent?.data ||
+        raw.replace(latestHourStrRef.current, "").slice(-1) ||
+        raw.slice(-1);
+      const d = parseInt(typedChar, 10);
+      if (!isNaN(d)) {
+        if (d >= 3) {
+          const formatted = "0" + d;
+          latestHourStrRef.current = formatted;
+          setHourStr(formatted);
+          commitTimeStrings(formatted, latestMinStrRef.current);
+          minInputRef.current?.focus();
+          minInputRef.current?.select();
+        } else {
+          latestHourStrRef.current = String(d);
+          setHourStr(String(d));
+        }
+      }
+      return;
+    }
+
+    // 3. Si tiene exactamente 1 dígito (ej: tipeó '1' habiendo seleccionado el campo)
     if (raw.length === 1) {
       const d = parseInt(raw, 10);
       if (d >= 3) {
-        // En formato 24h, 3..9 sólo puede ser 03..09. Formateamos y pasamos foco a minutos
         const formatted = "0" + d;
+        latestHourStrRef.current = formatted;
         setHourStr(formatted);
-        commitTimeStrings(formatted, minStr);
+        commitTimeStrings(formatted, latestMinStrRef.current);
         minInputRef.current?.focus();
         minInputRef.current?.select();
       } else {
-        // 0, 1 o 2: dejamos tipear el segundo dígito sin forzar ceros (ej: 1 -> 16)
+        latestHourStrRef.current = raw;
         setHourStr(raw);
       }
       return;
     }
-    // 2 dígitos
+
+    // 4. Si tiene 2 dígitos (ej: tenía '1' y tipeó '6' -> "16", o pegó "16")
     let val = parseInt(raw.slice(0, 2), 10);
+    if (isNaN(val)) val = 0;
     if (val > 23) val = 23;
     const formatted = String(val).padStart(2, "0");
+    latestHourStrRef.current = formatted;
     setHourStr(formatted);
-    commitTimeStrings(formatted, minStr);
+    commitTimeStrings(formatted, latestMinStrRef.current);
     minInputRef.current?.focus();
     minInputRef.current?.select();
   };
@@ -179,12 +219,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const handleHourKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      let hNum = parseInt(hourStr, 10);
+      let hNum = parseInt(latestHourStrRef.current, 10);
       if (isNaN(hNum)) hNum = Math.floor(context.hora_dia);
       hNum = Math.max(0, Math.min(23, hNum));
       const formatted = String(hNum).padStart(2, "0");
+      latestHourStrRef.current = formatted;
       setHourStr(formatted);
-      commitTimeStrings(formatted, minStr);
+      commitTimeStrings(formatted, latestMinStrRef.current);
       minInputRef.current?.focus();
       minInputRef.current?.select();
     } else if (e.key === "ArrowRight") {
@@ -198,61 +239,96 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
 
   const handleHourBlur = () => {
     isHourFocusedRef.current = false;
-    let hNum = parseInt(hourStr, 10);
+    let hNum = parseInt(latestHourStrRef.current, 10);
     if (isNaN(hNum)) hNum = Math.floor(context.hora_dia);
     hNum = Math.max(0, Math.min(23, hNum));
     const formatted = String(hNum).padStart(2, "0");
-    commitTimeStrings(formatted, minStr);
+    commitTimeStrings(formatted, latestMinStrRef.current);
   };
 
   const handleMinInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, "");
+
+    // 1. Si el usuario borró todo
     if (raw === "") {
+      latestMinStrRef.current = "";
       setMinStr("");
       return;
     }
+
+    // 2. Si tenía 2 dígitos (ej: "00") y tipeó un 3er carácter (ej: "003" o "300")
+    if (raw.length > 2) {
+      const nativeEvent = e.nativeEvent as InputEvent | undefined;
+      const typedChar =
+        nativeEvent?.data ||
+        raw.replace(latestMinStrRef.current, "").slice(-1) ||
+        raw.slice(-1);
+      const d = parseInt(typedChar, 10);
+      if (!isNaN(d)) {
+        if (d >= 6) {
+          const formatted = "0" + d;
+          latestMinStrRef.current = formatted;
+          setMinStr(formatted);
+          commitTimeStrings(latestHourStrRef.current, formatted);
+          minInputRef.current?.blur();
+        } else {
+          latestMinStrRef.current = String(d);
+          setMinStr(String(d));
+        }
+      }
+      return;
+    }
+
+    // 3. Si tiene exactamente 1 dígito (ej: tipeó '3' habiendo seleccionado el campo)
     if (raw.length === 1) {
       const d = parseInt(raw, 10);
       if (d >= 6) {
-        // En minutos, 6..9 sólo puede ser 06..09
         const formatted = "0" + d;
+        latestMinStrRef.current = formatted;
         setMinStr(formatted);
-        commitTimeStrings(hourStr, formatted);
+        commitTimeStrings(latestHourStrRef.current, formatted);
         minInputRef.current?.blur();
       } else {
-        // 0..5: dejamos tipear el segundo dígito (ej: 3 -> 30)
+        latestMinStrRef.current = raw;
         setMinStr(raw);
       }
       return;
     }
-    // 2 dígitos
+
+    // 4. Si tiene 2 dígitos (ej: tenía '3' y tipeó '0' -> "30", o pegó "30")
     let val = parseInt(raw.slice(0, 2), 10);
+    if (isNaN(val)) val = 0;
     if (val > 59) val = 59;
     const formatted = String(val).padStart(2, "0");
+    latestMinStrRef.current = formatted;
     setMinStr(formatted);
-    commitTimeStrings(hourStr, formatted);
+    commitTimeStrings(latestHourStrRef.current, formatted);
     minInputRef.current?.blur();
   };
 
   const handleMinKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Backspace") {
       const input = e.currentTarget;
-      if (minStr === "" || (input.selectionStart === 0 && input.selectionEnd === 0)) {
+      if (
+        latestMinStrRef.current === "" ||
+        (input.selectionStart === 0 && input.selectionEnd === 0)
+      ) {
         e.preventDefault();
         hourInputRef.current?.focus();
         hourInputRef.current?.select();
       }
     } else if (e.key === "Enter") {
       e.preventDefault();
-      let mNum = parseInt(minStr, 10);
+      let mNum = parseInt(latestMinStrRef.current, 10);
       if (isNaN(mNum)) {
         const curH = Math.floor(context.hora_dia);
         mNum = Math.round((context.hora_dia - curH) * 60);
       }
       mNum = Math.max(0, Math.min(59, mNum));
       const formatted = String(mNum).padStart(2, "0");
+      latestMinStrRef.current = formatted;
       setMinStr(formatted);
-      commitTimeStrings(hourStr, formatted);
+      commitTimeStrings(latestHourStrRef.current, formatted);
       minInputRef.current?.blur();
     } else if (e.key === "ArrowLeft") {
       const input = e.currentTarget;
@@ -265,14 +341,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
 
   const handleMinBlur = () => {
     isMinFocusedRef.current = false;
-    let mNum = parseInt(minStr, 10);
+    let mNum = parseInt(latestMinStrRef.current, 10);
     if (isNaN(mNum)) {
       const curH = Math.floor(context.hora_dia);
       mNum = Math.round((context.hora_dia - curH) * 60);
     }
     mNum = Math.max(0, Math.min(59, mNum));
     const formatted = String(mNum).padStart(2, "0");
-    commitTimeStrings(hourStr, formatted);
+    commitTimeStrings(latestHourStrRef.current, formatted);
   };
 
   const handleDiaChange = (dia: DiaSemanaType) => {
@@ -374,6 +450,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 isHourFocusedRef.current = true;
                 e.target.select();
               }}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
               onBlur={handleHourBlur}
               className="w-10 rounded-lg border border-slate-700 bg-slate-900 py-1 text-center font-mono text-sm font-bold text-cyan-300 focus:border-cyan-400 focus:outline-none"
             />
@@ -391,6 +468,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 isMinFocusedRef.current = true;
                 e.target.select();
               }}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
               onBlur={handleMinBlur}
               className="w-10 rounded-lg border border-slate-700 bg-slate-900 py-1 text-center font-mono text-sm font-bold text-cyan-300 focus:border-cyan-400 focus:outline-none"
             />
