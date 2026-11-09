@@ -73,19 +73,36 @@ class RosarioSpatialIndex:
             "distance_m": round(distance_m, 2),
         }
 
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        import unicodedata
+        norm = unicodedata.normalize("NFKD", text.lower())
+        return "".join(c for c in norm if not unicodedata.combining(c))
+
     def search_nodes(self, query: str, limit: int = 15) -> list[dict[str, Any]]:
-        """Busca esquinas de Rosario por nombre de intersección o calle."""
-        q = query.strip().lower()
+        """Busca esquinas de Rosario por nombre de intersección o calle (insensible a tildes/mayúsculas)."""
+        q = self._normalize_text(query.strip())
         if not q:
             return self.nodes[:limit]
-        terms = [t for t in q.replace(" y ", " ").split() if t]
+        stop_words = {"y", "e", "de", "del", "la", "el", "av", "av.", "bv", "bv."}
+        terms = [
+            t
+            for t in q.replace(",", " ").replace(".", " ").split()
+            if t and t not in stop_words
+        ]
+        if not terms:
+            terms = [q]
         results: list[dict[str, Any]] = []
+        seen_labels: set[str] = set()
         for n in self.nodes:
-            lbl = n["label"].lower()
+            raw_lbl = str(n["label"])
+            lbl = self._normalize_text(raw_lbl)
             if all(t in lbl for t in terms):
-                results.append(n)
-                if len(results) >= limit:
-                    break
+                if raw_lbl not in seen_labels:
+                    seen_labels.add(raw_lbl)
+                    results.append(n)
+                    if len(results) >= limit:
+                        break
         return results
 
     @staticmethod

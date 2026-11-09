@@ -285,14 +285,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       <MapContainer
         center={ROSARIO_CENTER}
         zoom={DEFAULT_ZOOM}
-        minZoom={11}
+        minZoom={12}
         maxZoom={18}
+        maxBounds={[
+          [-33.08, -60.85],
+          [-32.80, -60.50],
+        ]}
+        maxBoundsViscosity={1.0}
+        attributionControl={false}
         preferCanvas={true}
         zoomControl={false}
         className="h-full w-full z-0"
       >
         <TileLayer
-          attribution='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           maxZoom={16}
         />

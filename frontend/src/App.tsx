@@ -2,9 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Navigation,
   BarChart3,
-  Car,
-  Package,
-  Zap,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
@@ -12,7 +9,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import MapViewer, { SelectionMode, ViewportStats } from "./components/MapViewer";
+import MapViewer, { SelectionMode } from "./components/MapViewer";
 import BenchmarkModal from "./components/BenchmarkModal";
 import ControlPanel from "./components/ControlPanel";
 import MetricsCard from "./components/MetricsCard";
@@ -39,10 +36,10 @@ export function getSystemDefaultContext(): ContextParams {
   ];
   const dia_semana = days[now.getDay()] ?? "miercoles";
   const hours = now.getHours();
-  const halfHour = now.getMinutes() >= 30 ? 0.5 : 0.0;
+  const minutes = now.getMinutes();
 
   return {
-    hora_dia: hours + halfHour,
+    hora_dia: Number((hours + minutes / 60).toFixed(2)),
     dia_semana,
     clima: "despejado",
     es_feriado: false,
@@ -63,9 +60,9 @@ export const App: React.FC = () => {
   // Panel lateral ocultable para ver el mapa completo cuando se desee
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
-  // Lista unificada de paradas (como Google Maps: empieza con 1. Origen y 2. Destino, y permite sumar más paradas)
+  // Lista unificada de paradas (empieza con 1. Origen y 2. Destino, y permite sumar más paradas)
   const [waypoints, setWaypoints] = useState<(NodeInfo | null)[]>([null, null]);
-  // Índice de la parada que recibirá el próximo clic en el mapa
+  // Índice de la parada actualmente seleccionada para ubicar o corregir en el mapa
   const [activeStopIndex, setActiveStopIndex] = useState<number>(0);
 
   // Estado para arrastrar y reordenar paradas manteniendo presionadas las 3 rayitas (≡)
@@ -80,7 +77,6 @@ export const App: React.FC = () => {
   const [showTrafficLayer, setShowTrafficLayer] = useState<boolean>(true);
   const [showStaticRoute, setShowStaticRoute] = useState<boolean>(true);
   const [showDynamicRoute, setShowDynamicRoute] = useState<boolean>(true);
-  const [viewportStats, setViewportStats] = useState<ViewportStats | null>(null);
   const [flyToLocation, setFlyToLocation] = useState<{
     lat: number;
     lon: number;
@@ -93,12 +89,10 @@ export const App: React.FC = () => {
   // Calcula la ruta encadenando todas las paradas en orden (1 ➔ 2 ➔ 3...) SIN vuelta al origen
   const calculateSequentialRoute = useCallback(
     async (currentWaypoints: (NodeInfo | null)[], ctx: ContextParams) => {
-      const filledIndices: number[] = [];
       const filledStops: NodeInfo[] = [];
 
-      currentWaypoints.forEach((wp, idx) => {
+      currentWaypoints.forEach((wp) => {
         if (wp !== null) {
-          filledIndices.push(idx);
           filledStops.push(wp);
         }
       });
@@ -132,22 +126,6 @@ export const App: React.FC = () => {
         }
 
         const legResults = await Promise.all(legPromises);
-
-        // Actualizamos nombres reales de esquinas si algún punto venía con id=0
-        setWaypoints((prev) => {
-          const next = [...prev];
-          legResults.forEach((leg, i) => {
-            const origIdx = filledIndices[i];
-            const destIdx = filledIndices[i + 1];
-            if (next[origIdx]) {
-              next[origIdx] = leg.origin;
-            }
-            if (next[destIdx]) {
-              next[destIdx] = leg.destination;
-            }
-          });
-          return next;
-        });
 
         if (legResults.length === 1) {
           setRouteResult(legResults[0]);
@@ -284,7 +262,10 @@ export const App: React.FC = () => {
     });
   }, [context.clima, handleContextChange]);
 
-  // Manejador cuando el usuario hace clic en el mapa (o elige una esquina en el buscador)
+  // Manejador cuando el usuario hace clic en el mapa (o elige una esquina en el buscador):
+  // Evaluación inteligente:
+  // - Si la parada actual estaba vacía (es la 1ra vez que la estás marcando) y abajo hay otra parada vacía, avanza sola a esa parada vacía.
+  // - Si la parada actual YA tenía una calle (le diste clic para corregirla) o ya no quedan vacías abajo, se queda en esa misma parada aunque toques el mapa varias veces.
   const handleNodeSelected = useCallback(
     (node: NodeInfo, _mode?: SelectionMode) => {
       const targetIdx =
@@ -292,19 +273,19 @@ export const App: React.FC = () => {
           ? activeStopIndex
           : 0;
 
+      const wasTargetEmpty = waypoints[targetIdx] === null;
       const nextWaypoints = [...waypoints];
       nextWaypoints[targetIdx] = node;
       setWaypoints(nextWaypoints);
 
-      // Buscar si queda algún casillero vacío para avanzar automáticamente al siguiente
-      const nextEmptyIdx = nextWaypoints.findIndex((w) => w === null);
-      if (nextEmptyIdx !== -1) {
-        setActiveStopIndex(nextEmptyIdx);
-      } else {
-        // Si todos los casilleros actuales están llenos, avanzamos en ciclo (o al siguiente)
-        const nextCycleIdx =
-          targetIdx + 1 < nextWaypoints.length ? targetIdx + 1 : 0;
-        setActiveStopIndex(nextCycleIdx);
+      if (wasTargetEmpty) {
+        // Solo si era la primera vez que se completaba este casillero, buscamos si hay uno vacío más abajo
+        const nextEmptyBelow = nextWaypoints.findIndex(
+          (w, idx) => idx > targetIdx && w === null
+        );
+        if (nextEmptyBelow !== -1) {
+          setActiveStopIndex(nextEmptyBelow);
+        }
       }
 
       // Si ya hay al menos 2 paradas cargadas, calcula la ruta automáticamente
@@ -328,13 +309,11 @@ export const App: React.FC = () => {
     (idx: number) => {
       let nextWaypoints: (NodeInfo | null)[];
       if (waypoints.length <= 2) {
-        // Si solo hay 2 casilleros (1 y 2), vaciamos ese casillero y lo dejamos activo
         nextWaypoints = [...waypoints];
         nextWaypoints[idx] = null;
         setWaypoints(nextWaypoints);
         setActiveStopIndex(idx);
       } else {
-        // Si hay 3 o más paradas, quitamos la fila y renumeramos
         nextWaypoints = waypoints.filter((_, i) => i !== idx);
         setWaypoints(nextWaypoints);
         setActiveStopIndex((prev) =>
@@ -392,98 +371,10 @@ export const App: React.FC = () => {
     setRouteError(null);
   }, []);
 
-  // 3 Ejemplos Rápidos de 1 Clic (usando el mismo sistema unificado de paradas numeradas)
-  const handleQuickRoutePellegrini = useCallback(() => {
-    const p1: NodeInfo = {
-      id: 0,
-      lat: -32.9554,
-      lon: -60.6558,
-      label: "Av. Pellegrini y Corrientes",
-    };
-    const p2: NodeInfo = {
-      id: 0,
-      lat: -32.9475,
-      lon: -60.6305,
-      label: "Av. Belgrano y Córdoba (Monumento)",
-    };
-    const ctx: ContextParams = {
-      hora_dia: 18.5,
-      dia_semana: "viernes",
-      clima: "tormenta",
-      es_feriado: false,
-    };
-    const nextWps = [p1, p2];
-    setWaypoints(nextWps);
-    setActiveStopIndex(0);
-    setContext(ctx);
-    calculateSequentialRoute(nextWps, ctx);
-    setFlyToLocation({ lat: -32.9515, lon: -60.643, zoom: 14 });
-  }, [calculateSequentialRoute]);
-
-  const handleQuickRouteCircunvalacion = useCallback(() => {
-    const p1: NodeInfo = {
-      id: 0,
-      lat: -32.973,
-      lon: -60.68,
-      label: "Av. Circunvalación y Av. Pellegrini",
-    };
-    const p2: NodeInfo = {
-      id: 0,
-      lat: -32.9468,
-      lon: -60.6393,
-      label: "Bv. Oroño y Córdoba (Centro)",
-    };
-    const ctx: ContextParams = {
-      hora_dia: 8.0,
-      dia_semana: "miercoles",
-      clima: "despejado",
-      es_feriado: false,
-    };
-    const nextWps = [p1, p2];
-    setWaypoints(nextWps);
-    setActiveStopIndex(0);
-    setContext(ctx);
-    calculateSequentialRoute(nextWps, ctx);
-    setFlyToLocation({ lat: -32.96, lon: -60.66, zoom: 13 });
-  }, [calculateSequentialRoute]);
-
-  const handleQuickRouteMultiStop = useCallback(() => {
-    const nextWps: NodeInfo[] = [
-      {
-        id: 0,
-        lat: -32.9377,
-        lon: -60.6728,
-        label: "Terminal de Ómnibus (Cafferata)",
-      },
-      {
-        id: 0,
-        lat: -32.9554,
-        lon: -60.6558,
-        label: "Av. Pellegrini y Corrientes",
-      },
-      {
-        id: 0,
-        lat: -32.9468,
-        lon: -60.6393,
-        label: "Bv. Oroño y Córdoba",
-      },
-      {
-        id: 0,
-        lat: -32.9475,
-        lon: -60.6305,
-        label: "Monumento a la Bandera",
-      },
-    ];
-    setWaypoints(nextWps);
-    setActiveStopIndex(0);
-    calculateSequentialRoute(nextWps, context);
-    setFlyToLocation({ lat: -32.948, lon: -60.65, zoom: 13 });
-  }, [context, calculateSequentialRoute]);
-
   const hasAnyStop = waypoints.some((w) => w !== null);
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
+    <div className="fixed inset-0 h-screen w-screen overflow-hidden overscroll-none bg-slate-950 text-slate-100">
       {/* Mapa interactivo con paradas numeradas y rutas de alto contraste */}
       <MapViewer
         context={context}
@@ -495,7 +386,6 @@ export const App: React.FC = () => {
         showDynamicRoute={showDynamicRoute}
         flyToLocation={flyToLocation}
         onNodeSelected={handleNodeSelected}
-        onViewportStatsChange={setViewportStats}
       />
 
       {/* Botón flotante para reabrir el panel cuando está oculto */}
@@ -522,11 +412,14 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Barra Lateral Flotante de Control (Ocultable y Simplificada estilo Google Maps) */}
+      {/* Barra Lateral Flotante de Control (Ocultable, sin saltos de layout ni desborde de scroll) */}
       {isSidebarOpen && (
-        <aside className="pointer-events-auto absolute left-4 top-4 bottom-4 z-[500] flex w-96 flex-col gap-2.5 overflow-y-auto pr-1">
+        <aside
+          onWheel={(e) => e.stopPropagation()}
+          className="pointer-events-auto absolute left-4 top-4 bottom-4 z-[500] flex w-96 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1"
+        >
           {/* 1. Cabecera Principal con botón de Ocultar Panel */}
-          <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
+          <div className="relative z-10 flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400">
                 <Navigation className="h-5 w-5" />
@@ -536,9 +429,7 @@ export const App: React.FC = () => {
                   Rosario Last-Mile Router
                 </h1>
                 <p className="text-[11px] text-slate-400">
-                  {viewportStats
-                    ? `${viewportStats.totalEdges.toLocaleString()} cuadras · ${viewportStats.executionTimeMs.toFixed(0)} ms`
-                    : "13.134 esquinas · Árbol CART + Dijkstra"}
+                  13.134 esquinas · Árbol CART + Dijkstra
                 </p>
               </div>
             </div>
@@ -566,8 +457,8 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. Lista Unificada de Paradas Numeradas (con 3 rayitas ≡ para arrastrar y reordenar) */}
-          <div className="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
+          {/* 2. Lista Unificada de Paradas Numeradas (z-30 para que el buscador flote siempre por arriba) */}
+          <div className="relative z-30 flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl">
             <div className="flex items-center justify-between text-[11px]">
               <span className="font-semibold text-slate-200">
                 📍 Paradas del recorrido (clic en el mapa)
@@ -721,8 +612,9 @@ export const App: React.FC = () => {
               </button>
             )}
 
-            {/* Buscador opcional por nombre de calle */}
+            {/* Buscador por nombre de calle (asigna directamente a la parada activa y flota por encima) */}
             <StreetSearch
+              activeStopNumber={activeStopIndex + 1}
               onSelectCorner={(node) => {
                 handleNodeSelected(node);
               }}
@@ -731,105 +623,43 @@ export const App: React.FC = () => {
           </div>
 
           {routeError && (
-            <div className="rounded-xl border border-rose-500/40 bg-rose-950/60 p-3 text-xs text-rose-200">
+            <div className="relative z-10 rounded-xl border border-rose-500/40 bg-rose-950/60 p-3 text-xs text-rose-200">
               {routeError}
             </div>
           )}
 
-          {/* 3. Tarjeta de Métricas y Comparación (aparece cuando hay ruta calculada) */}
-          <MetricsCard
-            routeResult={routeResult}
-            tourResult={null}
-            appMode="route"
-            isCalculating={isCalculating}
-            onClear={handleResetPoints}
-          />
+          {/* 3. Tarjeta de Métricas y Comparación (z-10, sin colapsar ni parpadear al recalcular) */}
+          <div className="relative z-10">
+            <MetricsCard
+              routeResult={routeResult}
+              tourResult={null}
+              appMode="route"
+              isCalculating={isCalculating}
+              onClear={handleResetPoints}
+            />
+          </div>
 
-          {/* 4. Panel de Control Contextual (Hora, Día, Clima y Capas siempre visibles, sin selector de modo ni Presets) */}
-          <ControlPanel
-            context={context}
-            onContextChange={handleContextChange}
-            activePresetId={null}
-            onApplyPreset={() => {}}
-            presets={[]}
-            appMode="route"
-            onAppModeChange={() => {}}
-            hideModeSwitch={true}
-            showTrafficLayer={showTrafficLayer}
-            onToggleTrafficLayer={() => setShowTrafficLayer((p) => !p)}
-            showStaticRoute={showStaticRoute}
-            onToggleStaticRoute={() => setShowStaticRoute((p) => !p)}
-            showDynamicRoute={showDynamicRoute}
-            onToggleDynamicRoute={() => setShowDynamicRoute((p) => !p)}
-            isCalculating={isCalculating}
-            onResetPoints={handleResetPoints}
-            onUseCurrentTime={handleUseCurrentTime}
-          />
-
-          {/* 5. Ejemplos Rápidos de Demostración (1 Clic, compactos al pie) */}
-          <div className="flex flex-col gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/95 p-2.5 shadow-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              <span className="flex items-center gap-1 text-amber-400">
-                <Zap className="h-3 w-3" />
-                <span>Ejemplos de Ruta Prearmados (Opcional)</span>
-              </span>
-              <span className="text-[9px] text-cyan-400 font-mono">1 CLIC</span>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 text-left">
-              <button
-                type="button"
-                onClick={handleQuickRoutePellegrini}
-                data-testid="quick-route-pellegrini"
-                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-cyan-500/50 hover:bg-slate-800/60"
-                title="Pellegrini ➔ Monumento (Hora pico con tormenta)"
-              >
-                <div className="flex items-center gap-1 text-amber-400 text-xs">
-                  <Zap className="h-3.5 w-3.5 shrink-0" />
-                  <span className="font-bold text-[11px] text-slate-200">
-                    Pellegrini
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
-                  ➔ Monumento
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleQuickRouteCircunvalacion}
-                data-testid="quick-route-circunvalacion"
-                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-cyan-500/50 hover:bg-slate-800/60"
-                title="Circunvalación ➔ Microcentro (Acceso perimetral rápido)"
-              >
-                <div className="flex items-center gap-1 text-sky-400 text-xs">
-                  <Car className="h-3.5 w-3.5 shrink-0" />
-                  <span className="font-bold text-[11px] text-slate-200">
-                    Circunval.
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
-                  ➔ Centro
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleQuickRouteMultiStop}
-                data-testid="quick-route-tsp"
-                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-cyan-500/50 hover:bg-slate-800/60"
-                title="Recorrido con 4 paradas encadenadas (1 ➔ 2 ➔ 3 ➔ 4)"
-              >
-                <div className="flex items-center gap-1 text-purple-400 text-xs">
-                  <Package className="h-3.5 w-3.5 shrink-0" />
-                  <span className="font-bold text-[11px] text-slate-200">
-                    4 Paradas
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
-                  1 ➔ 2 ➔ 3 ➔ 4
-                </div>
-              </button>
-            </div>
+          {/* 4. Panel de Control Contextual (Reloj digital HH:MM, Día, Switch Feriado, Clima y Capas) */}
+          <div className="relative z-10">
+            <ControlPanel
+              context={context}
+              onContextChange={handleContextChange}
+              activePresetId={null}
+              onApplyPreset={() => {}}
+              presets={[]}
+              appMode="route"
+              onAppModeChange={() => {}}
+              hideModeSwitch={true}
+              showTrafficLayer={showTrafficLayer}
+              onToggleTrafficLayer={() => setShowTrafficLayer((p) => !p)}
+              showStaticRoute={showStaticRoute}
+              onToggleStaticRoute={() => setShowStaticRoute((p) => !p)}
+              showDynamicRoute={showDynamicRoute}
+              onToggleDynamicRoute={() => setShowDynamicRoute((p) => !p)}
+              isCalculating={isCalculating}
+              onResetPoints={handleResetPoints}
+              onUseCurrentTime={handleUseCurrentTime}
+            />
           </div>
         </aside>
       )}

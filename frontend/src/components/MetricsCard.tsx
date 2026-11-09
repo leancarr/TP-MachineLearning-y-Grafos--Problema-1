@@ -18,20 +18,20 @@ export interface MetricsCardProps {
   onClear?: () => void;
 }
 
-export const MetricsCard: React.FC<MetricsCardProps> = ({
+export const MetricsCard: React.FC<MetricsCardProps> = React.memo(({
   routeResult,
   tourResult,
   appMode,
   isCalculating,
   onClear,
 }) => {
-  if (isCalculating) {
+  if (isCalculating && !routeResult && !tourResult) {
     return (
       <div
         data-testid="metrics-card-loading"
-        className="flex items-center gap-2.5 rounded-2xl border border-emerald-500/30 bg-slate-900/95 p-4 text-xs text-emerald-300 shadow-2xl backdrop-blur-md animate-pulse"
+        className="flex items-center gap-2.5 rounded-2xl border border-cyan-500/30 bg-slate-900 p-4 text-xs text-cyan-300 shadow-2xl"
       >
-        <Zap className="h-4 w-4 animate-spin text-emerald-400" />
+        <Zap className="h-4 w-4 animate-spin text-cyan-400" />
         <span className="font-medium">
           Dijkstra artesanal evaluando pesos dinámicos en tiempo real...
         </span>
@@ -236,6 +236,6 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
   }
 
   return null;
-};
+});
 
 export default MetricsCard;
