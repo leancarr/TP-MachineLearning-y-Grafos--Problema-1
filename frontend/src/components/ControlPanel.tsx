@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Clock,
   Cloud,
@@ -92,11 +92,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
     String(currentMinutes).padStart(2, "0")
   );
 
+  const hourInputRef = useRef<HTMLInputElement>(null);
+  const minInputRef = useRef<HTMLInputElement>(null);
+  const isHourFocusedRef = useRef<boolean>(false);
+  const isMinFocusedRef = useRef<boolean>(false);
+
   useEffect(() => {
-    const h = Math.floor(context.hora_dia);
-    const m = Math.round((context.hora_dia - h) * 60);
-    setHourStr(String(h).padStart(2, "0"));
-    setMinStr(String(m).padStart(2, "0"));
+    if (!isHourFocusedRef.current && !isMinFocusedRef.current) {
+      const h = Math.floor(context.hora_dia);
+      const m = Math.round((context.hora_dia - h) * 60);
+      setHourStr(String(h).padStart(2, "0"));
+      setMinStr(String(m).padStart(2, "0"));
+    }
   }, [context.hora_dia]);
 
   const isRushHour =
@@ -113,10 +120,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   };
 
   const commitTimeStrings = (hRaw: string, mRaw: string) => {
-    const hNum = Math.max(0, Math.min(23, parseInt(hRaw || "0", 10) || 0));
-    const mNum = Math.max(0, Math.min(59, parseInt(mRaw || "0", 10) || 0));
-    setHourStr(String(hNum).padStart(2, "0"));
-    setMinStr(String(mNum).padStart(2, "0"));
+    let hNum = parseInt(hRaw, 10);
+    if (isNaN(hNum)) hNum = Math.floor(context.hora_dia);
+    hNum = Math.max(0, Math.min(23, hNum));
+
+    let mNum = parseInt(mRaw, 10);
+    if (isNaN(mNum)) {
+      const curH = Math.floor(context.hora_dia);
+      mNum = Math.round((context.hora_dia - curH) * 60);
+    }
+    mNum = Math.max(0, Math.min(59, mNum));
+
+    const formattedH = String(hNum).padStart(2, "0");
+    const formattedM = String(mNum).padStart(2, "0");
+    setHourStr(formattedH);
+    setMinStr(formattedM);
+
     const nextHoraDia = Number((hNum + mNum / 60).toFixed(2));
     if (nextHoraDia !== context.hora_dia) {
       onContextChange({
@@ -127,29 +146,133 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   };
 
   const handleHourInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
-    setHourStr(raw);
-    if (raw.length > 0) {
-      const hNum = Math.max(0, Math.min(23, parseInt(raw, 10) || 0));
-      const mNum = Math.max(0, Math.min(59, parseInt(minStr || "0", 10) || 0));
-      onContextChange({
-        ...context,
-        hora_dia: Number((hNum + mNum / 60).toFixed(2)),
-      });
+    const raw = e.target.value.replace(/\D/g, "");
+    if (raw === "") {
+      setHourStr("");
+      return;
+    }
+    if (raw.length === 1) {
+      const d = parseInt(raw, 10);
+      if (d >= 3) {
+        // En formato 24h, 3..9 sólo puede ser 03..09. Formateamos y pasamos foco a minutos
+        const formatted = "0" + d;
+        setHourStr(formatted);
+        commitTimeStrings(formatted, minStr);
+        minInputRef.current?.focus();
+        minInputRef.current?.select();
+      } else {
+        // 0, 1 o 2: dejamos tipear el segundo dígito sin forzar ceros (ej: 1 -> 16)
+        setHourStr(raw);
+      }
+      return;
+    }
+    // 2 dígitos
+    let val = parseInt(raw.slice(0, 2), 10);
+    if (val > 23) val = 23;
+    const formatted = String(val).padStart(2, "0");
+    setHourStr(formatted);
+    commitTimeStrings(formatted, minStr);
+    minInputRef.current?.focus();
+    minInputRef.current?.select();
+  };
+
+  const handleHourKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      let hNum = parseInt(hourStr, 10);
+      if (isNaN(hNum)) hNum = Math.floor(context.hora_dia);
+      hNum = Math.max(0, Math.min(23, hNum));
+      const formatted = String(hNum).padStart(2, "0");
+      setHourStr(formatted);
+      commitTimeStrings(formatted, minStr);
+      minInputRef.current?.focus();
+      minInputRef.current?.select();
+    } else if (e.key === "ArrowRight") {
+      const input = e.currentTarget;
+      if (input.selectionStart === input.value.length) {
+        minInputRef.current?.focus();
+        minInputRef.current?.select();
+      }
     }
   };
 
+  const handleHourBlur = () => {
+    isHourFocusedRef.current = false;
+    let hNum = parseInt(hourStr, 10);
+    if (isNaN(hNum)) hNum = Math.floor(context.hora_dia);
+    hNum = Math.max(0, Math.min(23, hNum));
+    const formatted = String(hNum).padStart(2, "0");
+    commitTimeStrings(formatted, minStr);
+  };
+
   const handleMinInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "").slice(0, 2);
-    setMinStr(raw);
-    if (raw.length > 0) {
-      const hNum = Math.max(0, Math.min(23, parseInt(hourStr || "0", 10) || 0));
-      const mNum = Math.max(0, Math.min(59, parseInt(raw, 10) || 0));
-      onContextChange({
-        ...context,
-        hora_dia: Number((hNum + mNum / 60).toFixed(2)),
-      });
+    const raw = e.target.value.replace(/\D/g, "");
+    if (raw === "") {
+      setMinStr("");
+      return;
     }
+    if (raw.length === 1) {
+      const d = parseInt(raw, 10);
+      if (d >= 6) {
+        // En minutos, 6..9 sólo puede ser 06..09
+        const formatted = "0" + d;
+        setMinStr(formatted);
+        commitTimeStrings(hourStr, formatted);
+        minInputRef.current?.blur();
+      } else {
+        // 0..5: dejamos tipear el segundo dígito (ej: 3 -> 30)
+        setMinStr(raw);
+      }
+      return;
+    }
+    // 2 dígitos
+    let val = parseInt(raw.slice(0, 2), 10);
+    if (val > 59) val = 59;
+    const formatted = String(val).padStart(2, "0");
+    setMinStr(formatted);
+    commitTimeStrings(hourStr, formatted);
+    minInputRef.current?.blur();
+  };
+
+  const handleMinKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      const input = e.currentTarget;
+      if (minStr === "" || (input.selectionStart === 0 && input.selectionEnd === 0)) {
+        e.preventDefault();
+        hourInputRef.current?.focus();
+        hourInputRef.current?.select();
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      let mNum = parseInt(minStr, 10);
+      if (isNaN(mNum)) {
+        const curH = Math.floor(context.hora_dia);
+        mNum = Math.round((context.hora_dia - curH) * 60);
+      }
+      mNum = Math.max(0, Math.min(59, mNum));
+      const formatted = String(mNum).padStart(2, "0");
+      setMinStr(formatted);
+      commitTimeStrings(hourStr, formatted);
+      minInputRef.current?.blur();
+    } else if (e.key === "ArrowLeft") {
+      const input = e.currentTarget;
+      if (input.selectionStart === 0 && input.selectionEnd === 0) {
+        hourInputRef.current?.focus();
+        hourInputRef.current?.select();
+      }
+    }
+  };
+
+  const handleMinBlur = () => {
+    isMinFocusedRef.current = false;
+    let mNum = parseInt(minStr, 10);
+    if (isNaN(mNum)) {
+      const curH = Math.floor(context.hora_dia);
+      mNum = Math.round((context.hora_dia - curH) * 60);
+    }
+    mNum = Math.max(0, Math.min(59, mNum));
+    const formatted = String(mNum).padStart(2, "0");
+    commitTimeStrings(hourStr, formatted);
   };
 
   const handleDiaChange = (dia: DiaSemanaType) => {
@@ -239,24 +362,36 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           {/* Entrada digital tipo alarma HH : MM */}
           <div className="flex items-center gap-1">
             <input
+              ref={hourInputRef}
               type="text"
               inputMode="numeric"
               aria-label="Horas (00 a 23)"
+              data-testid="hour-input"
               value={hourStr}
               onChange={handleHourInputChange}
-              onBlur={() => commitTimeStrings(hourStr, minStr)}
-              onFocus={(e) => e.target.select()}
+              onKeyDown={handleHourKeyDown}
+              onFocus={(e) => {
+                isHourFocusedRef.current = true;
+                e.target.select();
+              }}
+              onBlur={handleHourBlur}
               className="w-10 rounded-lg border border-slate-700 bg-slate-900 py-1 text-center font-mono text-sm font-bold text-cyan-300 focus:border-cyan-400 focus:outline-none"
             />
             <span className="font-mono text-sm font-bold text-slate-400">:</span>
             <input
+              ref={minInputRef}
               type="text"
               inputMode="numeric"
               aria-label="Minutos (00 a 59)"
+              data-testid="min-input"
               value={minStr}
               onChange={handleMinInputChange}
-              onBlur={() => commitTimeStrings(hourStr, minStr)}
-              onFocus={(e) => e.target.select()}
+              onKeyDown={handleMinKeyDown}
+              onFocus={(e) => {
+                isMinFocusedRef.current = true;
+                e.target.select();
+              }}
+              onBlur={handleMinBlur}
               className="w-10 rounded-lg border border-slate-700 bg-slate-900 py-1 text-center font-mono text-sm font-bold text-cyan-300 focus:border-cyan-400 focus:outline-none"
             />
             <span className="ml-0.5 text-[11px] font-medium text-slate-400">

@@ -216,4 +216,52 @@ describe("ControlPanel Component", () => {
     fireEvent.click(screen.getByTestId("toggle-static-route"));
     expect(toggleStatic).toHaveBeenCalledTimes(1);
   });
+
+  it("handles digital alarm clock inputs: typing 16, Enter, and auto-advance", () => {
+    const handleContextChange = vi.fn();
+    render(
+      <ControlPanel
+        context={mockContext}
+        onContextChange={handleContextChange}
+        activePresetId={null}
+        onApplyPreset={vi.fn()}
+        presets={mockPresets}
+        appMode="route"
+        onAppModeChange={vi.fn()}
+        showTrafficLayer={true}
+        onToggleTrafficLayer={vi.fn()}
+        showStaticRoute={true}
+        onToggleStaticRoute={vi.fn()}
+        showDynamicRoute={true}
+        onToggleDynamicRoute={vi.fn()}
+      />
+    );
+
+    const hourInput = screen.getByTestId("hour-input") as HTMLInputElement;
+    const minInput = screen.getByTestId("min-input") as HTMLInputElement;
+
+    expect(hourInput.value).toBe("08");
+    expect(minInput.value).toBe("00");
+
+    // Borrar y tipear '1': no debe forzar '01' de golpe para permitir tipear '16'
+    fireEvent.focus(hourInput);
+    fireEvent.change(hourInput, { target: { value: "1" } });
+    expect(hourInput.value).toBe("1");
+
+    // Completar con '16'
+    fireEvent.change(hourInput, { target: { value: "16" } });
+    expect(hourInput.value).toBe("16");
+    expect(handleContextChange).toHaveBeenCalledWith(
+      expect.objectContaining({ hora_dia: 16 })
+    );
+
+    // Si tipeamos '3', al ser >= 3 se formatea inmediatamente como '03'
+    fireEvent.change(hourInput, { target: { value: "3" } });
+    expect(hourInput.value).toBe("03");
+
+    // Backspace en minutos vacíos mueve foco a horas
+    fireEvent.focus(minInput);
+    fireEvent.change(minInput, { target: { value: "" } });
+    fireEvent.keyDown(minInput, { key: "Backspace" });
+  });
 });
