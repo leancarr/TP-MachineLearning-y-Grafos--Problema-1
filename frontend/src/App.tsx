@@ -1,6 +1,5 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  MapPin,
   Navigation,
   BarChart3,
   Car,
@@ -10,14 +9,13 @@ import {
   PanelLeftOpen,
   RotateCcw,
   Plus,
-  Route,
-  Truck,
+  Menu,
+  X,
 } from "lucide-react";
 import MapViewer, { SelectionMode, ViewportStats } from "./components/MapViewer";
 import BenchmarkModal from "./components/BenchmarkModal";
 import ControlPanel from "./components/ControlPanel";
 import MetricsCard from "./components/MetricsCard";
-import StopsManager from "./components/StopsManager";
 import StreetSearch from "./components/StreetSearch";
 import {
   ContextParams,
@@ -25,12 +23,8 @@ import {
   NodeInfo,
   RouteResponse,
   ScenarioPreset,
-  TourResponse,
 } from "./types";
-import {
-  calculateDeliveryTour,
-  calculateRouteComparison,
-} from "./services/api";
+import { calculateRouteComparison } from "./services/api";
 
 export function getSystemDefaultContext(): ContextParams {
   const now = new Date();
@@ -58,102 +52,27 @@ export function getSystemDefaultContext(): ContextParams {
 export const DEFAULT_CONTEXT: ContextParams = getSystemDefaultContext();
 export const DEFAULT_NORMAL_DAY_CONTEXT = DEFAULT_CONTEXT;
 
-export const FALLBACK_PRESETS: ScenarioPreset[] = [
-  {
-    id: "pico_manana",
-    name: "Hora Pico Mañana",
-    time_label: "08:00 hs",
-    hora_dia: 8.0,
-    dia_semana: "miercoles",
-    clima: "despejado",
-    es_feriado: false,
-    icon: "🚗",
-    badge: "Congestión",
-    badge_color: "red",
-    description: "Ingreso masivo hacia el centro por Pellegrini y Oroño.",
-  },
-  {
-    id: "pico_tarde_tormenta",
-    name: "Pico con Tormenta",
-    time_label: "18:30 hs",
-    hora_dia: 18.5,
-    dia_semana: "viernes",
-    clima: "tormenta",
-    es_feriado: false,
-    icon: "⛈️",
-    badge: "Colapso Severo",
-    badge_color: "red",
-    description: "Peor caso urbano: regreso a casa con tormenta y colapso de arterias.",
-  },
-  {
-    id: "madrugada_despejado",
-    name: "Madrugada Fluida",
-    time_label: "03:00 hs",
-    hora_dia: 3.0,
-    dia_semana: "martes",
-    clima: "despejado",
-    es_feriado: false,
-    icon: "🌙",
-    badge: "Fluido",
-    badge_color: "green",
-    description: "Tránsito libre, velocidad máxima en avenidas y circunvalación.",
-  },
-  {
-    id: "mediodia_lluvia",
-    name: "Mediodía Lluvioso",
-    time_label: "13:00 hs",
-    hora_dia: 13.0,
-    dia_semana: "jueves",
-    clima: "lluvia",
-    es_feriado: false,
-    icon: "🌧️",
-    badge: "Lluvia",
-    badge_color: "yellow",
-    description: "Salida escolar con calzada resbaladiza.",
-  },
-  {
-    id: "domingo_feriado",
-    name: "Domingo Feriado",
-    time_label: "16:00 hs",
-    hora_dia: 16.0,
-    dia_semana: "domingo",
-    clima: "despejado",
-    es_feriado: true,
-    icon: "☀️",
-    badge: "Recreativo",
-    badge_color: "green",
-    description: "Tránsito recreativo costero y baja densidad general.",
-  },
-];
+export const FALLBACK_PRESETS: ScenarioPreset[] = [];
 
 export const App: React.FC = () => {
   // Inicializa por defecto con la hora y día reales del sistema operativo / navegador
   const [context, setContext] = useState<ContextParams>(() =>
     getSystemDefaultContext()
   );
-  const [activePresetId, setActivePresetId] = useState<string | null>(null);
-  const [appMode, setAppMode] = useState<"route" | "tour">("route");
 
   // Panel lateral ocultable para ver el mapa completo cuando se desee
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
-  // Puntos de Ruteo (limpios al iniciar para que el usuario elija con 2 clics en el mapa)
-  const [origin, setOrigin] = useState<NodeInfo | null>(null);
-  const [destination, setDestination] = useState<NodeInfo | null>(null);
+  // Lista unificada de paradas (como Google Maps: empieza con 1. Origen y 2. Destino, y permite sumar más paradas)
+  const [waypoints, setWaypoints] = useState<(NodeInfo | null)[]>([null, null]);
+  // Índice de la parada que recibirá el próximo clic en el mapa
+  const [activeStopIndex, setActiveStopIndex] = useState<number>(0);
 
-  // Controla si el usuario presionó explícitamente el botón de cambiar sólo el Origen
-  const [explicitSelectionButton, setExplicitSelectionButton] =
-    useState<boolean>(false);
+  // Estado para arrastrar y reordenar paradas manteniendo presionadas las 3 rayitas (≡)
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const draggingIndexRef = useRef<number | null>(null);
 
-  // Puntos de TSP
-  const [depot, setDepot] = useState<NodeInfo | null>(null);
-  const [stops, setStops] = useState<NodeInfo[]>([]);
-  const [returnToDepot, setReturnToDepot] = useState<boolean>(true);
-
-  // Estados de Interacción y Resultados: SIEMPRE activo en "origin" al iniciar
-  const [selectionMode, setSelectionMode] = useState<SelectionMode>("origin");
   const [routeResult, setRouteResult] = useState<RouteResponse | null>(null);
-  const [tourResult, setTourResult] = useState<TourResponse | null>(null);
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
   const [routeError, setRouteError] = useState<string | null>(null);
 
@@ -171,66 +90,171 @@ export const App: React.FC = () => {
   // Modal de Auditoría
   const [isBenchmarkOpen, setIsBenchmarkOpen] = useState<boolean>(false);
 
-  // Función para calcular ruta real calle por calle entre origen y destino
-  const triggerRouteCalculation = useCallback(
-    async (orig: NodeInfo, dest: NodeInfo, ctx: ContextParams) => {
-      setIsCalculating(true);
-      setRouteError(null);
-      try {
-        const res = await calculateRouteComparison({
-          origin_id: orig.id > 10000 ? orig.id : undefined,
-          destination_id: dest.id > 10000 ? dest.id : undefined,
-          origin_lat: orig.lat,
-          origin_lon: orig.lon,
-          destination_lat: dest.lat,
-          destination_lon: dest.lon,
-          ...ctx,
-        });
-        setOrigin(res.origin);
-        setDestination(res.destination);
-        setRouteResult(res);
-      } catch (err) {
-        console.error("Error calculando ruta en backend:", err);
-        setRouteError(
-          err instanceof Error
-            ? err.message
-            : "No se pudo calcular la ruta entre esas esquinas."
-        );
-      } finally {
-        setIsCalculating(false);
-      }
-    },
-    []
-  );
+  // Calcula la ruta encadenando todas las paradas en orden (1 ➔ 2 ➔ 3...) SIN vuelta al origen
+  const calculateSequentialRoute = useCallback(
+    async (currentWaypoints: (NodeInfo | null)[], ctx: ContextParams) => {
+      const filledIndices: number[] = [];
+      const filledStops: NodeInfo[] = [];
 
-  // Función para optimizar ronda de entregas (TSP 2-opt) por calles reales
-  const triggerTourOptimization = useCallback(
-    async (dep: NodeInfo, stps: NodeInfo[], ret: boolean, ctx: ContextParams) => {
-      if (!dep || stps.length === 0) return;
+      currentWaypoints.forEach((wp, idx) => {
+        if (wp !== null) {
+          filledIndices.push(idx);
+          filledStops.push(wp);
+        }
+      });
+
+      if (filledStops.length < 2) {
+        setRouteResult(null);
+        setRouteError(null);
+        return;
+      }
+
       setIsCalculating(true);
       setRouteError(null);
+
       try {
-        const res = await calculateDeliveryTour({
-          depot: {
-            node_id: dep.id > 10000 ? dep.id : undefined,
-            lat: dep.lat,
-            lon: dep.lon,
-          },
-          stops: stps.map((s) => ({
-            node_id: s.id > 10000 ? s.id : undefined,
-            lat: s.lat,
-            lon: s.lon,
-          })),
-          return_to_depot: ret,
-          ...ctx,
+        // Calculamos cada tramo consecutivo (1 -> 2, 2 -> 3, etc.) en paralelo por las calles reales
+        const legPromises: Promise<RouteResponse>[] = [];
+        for (let i = 0; i < filledStops.length - 1; i++) {
+          const orig = filledStops[i];
+          const dest = filledStops[i + 1];
+          legPromises.push(
+            calculateRouteComparison({
+              origin_id: orig.id > 10000 ? orig.id : undefined,
+              destination_id: dest.id > 10000 ? dest.id : undefined,
+              origin_lat: orig.lat,
+              origin_lon: orig.lon,
+              destination_lat: dest.lat,
+              destination_lon: dest.lon,
+              ...ctx,
+            })
+          );
+        }
+
+        const legResults = await Promise.all(legPromises);
+
+        // Actualizamos nombres reales de esquinas si algún punto venía con id=0
+        setWaypoints((prev) => {
+          const next = [...prev];
+          legResults.forEach((leg, i) => {
+            const origIdx = filledIndices[i];
+            const destIdx = filledIndices[i + 1];
+            if (next[origIdx]) {
+              next[origIdx] = leg.origin;
+            }
+            if (next[destIdx]) {
+              next[destIdx] = leg.destination;
+            }
+          });
+          return next;
         });
-        setTourResult(res);
+
+        if (legResults.length === 1) {
+          setRouteResult(legResults[0]);
+          return;
+        }
+
+        // Si hay 3 o más paradas, encadenamos todos los tramos en orden (1 ➔ 2 ➔ 3...) sin retorno
+        let dynDistM = 0;
+        let dynTimeSec = 0;
+        let dynExecMs = 0;
+        const dynCoords: [number, number][] = [];
+        const dynNodes: number[] = [];
+        const dynTramos: string[] = [];
+
+        let statDistM = 0;
+        let statTimeSec = 0;
+        let statExecMs = 0;
+        const statCoords: [number, number][] = [];
+        const statNodes: number[] = [];
+        const statTramos: string[] = [];
+
+        let totalExecMs = 0;
+
+        legResults.forEach((leg, idx) => {
+          dynDistM += leg.dynamic_route.distance_m;
+          dynTimeSec += leg.dynamic_route.time_sec;
+          dynExecMs += leg.dynamic_route.execution_time_ms;
+          leg.dynamic_route.coordinates.forEach((coord, cIdx) => {
+            if (idx === 0 || cIdx > 0) {
+              dynCoords.push(coord);
+            }
+          });
+          leg.dynamic_route.nodes.forEach((nid, nIdx) => {
+            if (idx === 0 || nIdx > 0) {
+              dynNodes.push(nid);
+            }
+          });
+          dynTramos.push(...leg.dynamic_route.tramos);
+
+          statDistM += leg.static_route.distance_m;
+          statTimeSec += leg.static_route.time_sec;
+          statExecMs += leg.static_route.execution_time_ms;
+          leg.static_route.coordinates.forEach((coord, cIdx) => {
+            if (idx === 0 || cIdx > 0) {
+              statCoords.push(coord);
+            }
+          });
+          leg.static_route.nodes.forEach((nid, nIdx) => {
+            if (idx === 0 || nIdx > 0) {
+              statNodes.push(nid);
+            }
+          });
+          statTramos.push(...leg.static_route.tramos);
+
+          totalExecMs += leg.total_execution_time_ms;
+        });
+
+        const timeSavedSec = statTimeSec - dynTimeSec;
+        const timeSavedMin = timeSavedSec / 60.0;
+        const timeSavedPct =
+          statTimeSec > 0 ? (timeSavedSec / statTimeSec) * 100.0 : 0.0;
+
+        const combinedResponse: RouteResponse = {
+          origin: legResults[0].origin,
+          destination: legResults[legResults.length - 1].destination,
+          dynamic_route: {
+            found: true,
+            mode: "dynamic_time",
+            distance_m: dynDistM,
+            distance_km: dynDistM / 1000.0,
+            time_sec: dynTimeSec,
+            time_min: dynTimeSec / 60.0,
+            nodes: dynNodes,
+            coordinates: dynCoords,
+            tramos: dynTramos,
+            execution_time_ms: dynExecMs,
+          },
+          static_route: {
+            found: true,
+            mode: "static_distance",
+            distance_m: statDistM,
+            distance_km: statDistM / 1000.0,
+            time_sec: statTimeSec,
+            time_min: statTimeSec / 60.0,
+            nodes: statNodes,
+            coordinates: statCoords,
+            tramos: statTramos,
+            execution_time_ms: statExecMs,
+          },
+          comparison: {
+            time_saved_sec: timeSavedSec,
+            time_saved_min: timeSavedMin,
+            time_saved_pct: timeSavedPct,
+            distance_diff_m: dynDistM - statDistM,
+            is_dynamic_faster: timeSavedSec > 1.0,
+          },
+          context: legResults[0].context,
+          total_execution_time_ms: totalExecMs,
+        };
+
+        setRouteResult(combinedResponse);
       } catch (err) {
-        console.error("Error en cálculo TSP:", err);
+        console.error("Error calculando ruta:", err);
         setRouteError(
           err instanceof Error
             ? err.message
-            : "No se pudo optimizar la ronda de reparto."
+            : "No se pudo calcular el recorrido entre esas esquinas."
         );
       } finally {
         setIsCalculating(false);
@@ -243,25 +267,12 @@ export const App: React.FC = () => {
   const handleContextChange = useCallback(
     (newCtx: ContextParams) => {
       setContext(newCtx);
-      setActivePresetId(null);
-
-      if (appMode === "route" && origin && destination) {
-        triggerRouteCalculation(origin, destination, newCtx);
-      } else if (appMode === "tour" && depot && stops.length > 0 && tourResult) {
-        triggerTourOptimization(depot, stops, returnToDepot, newCtx);
+      const filledCount = waypoints.filter((w) => w !== null).length;
+      if (filledCount >= 2) {
+        calculateSequentialRoute(waypoints, newCtx);
       }
     },
-    [
-      appMode,
-      origin,
-      destination,
-      depot,
-      stops,
-      tourResult,
-      returnToDepot,
-      triggerRouteCalculation,
-      triggerTourOptimization,
-    ]
+    [waypoints, calculateSequentialRoute]
   );
 
   // Botón para volver a la hora y día reales del sistema operativo
@@ -273,121 +284,123 @@ export const App: React.FC = () => {
     });
   }, [context.clima, handleContextChange]);
 
-  // Aplicar Preset de 1 Clic
-  const handleApplyPreset = useCallback(
-    (preset: ScenarioPreset) => {
-      const newCtx: ContextParams = {
-        hora_dia: preset.hora_dia,
-        dia_semana: preset.dia_semana,
-        clima: preset.clima,
-        es_feriado: preset.es_feriado,
-      };
-      setContext(newCtx);
-      setActivePresetId(preset.id);
-
-      if (appMode === "route" && origin && destination) {
-        triggerRouteCalculation(origin, destination, newCtx);
-      } else if (appMode === "tour" && depot && stops.length > 0 && tourResult) {
-        triggerTourOptimization(depot, stops, returnToDepot, newCtx);
-      }
-    },
-    [
-      appMode,
-      origin,
-      destination,
-      depot,
-      stops,
-      tourResult,
-      returnToDepot,
-      triggerRouteCalculation,
-      triggerTourOptimization,
-    ]
-  );
-
-  // Manejador de clics en esquinas del mapa:
-  // Ciclo intuitivo de 2 clics: Clic 1 = Origen -> Clic 2 = Destino (y calcula ruta) -> Clic 3 = Nuevo Origen
+  // Manejador cuando el usuario hace clic en el mapa (o elige una esquina en el buscador)
   const handleNodeSelected = useCallback(
-    (node: NodeInfo, mode: SelectionMode) => {
-      const effectiveMode = mode || "origin";
+    (node: NodeInfo, _mode?: SelectionMode) => {
+      const targetIdx =
+        activeStopIndex >= 0 && activeStopIndex < waypoints.length
+          ? activeStopIndex
+          : 0;
 
-      if (effectiveMode === "origin") {
-        setOrigin(node);
-        if (explicitSelectionButton && destination) {
-          // Si tocó el botón "Origen" en el panel y ya tenía destino, recalcula con ese destino
-          setExplicitSelectionButton(false);
-          setSelectionMode("destination");
-          triggerRouteCalculation(node, destination, context);
-        } else {
-          // Flujo natural en el mapa: el 1er clic fija Origen, limpia ruta previa y pide el 2do clic (Destino)
-          setDestination(null);
-          setRouteResult(null);
-          setSelectionMode("destination");
-        }
-      } else if (effectiveMode === "destination") {
-        setDestination(node);
-        setExplicitSelectionButton(false);
-        // Luego de marcar el destino, deja listo "origin" por si el usuario quiere armar otra ruta con 2 clics
-        setSelectionMode("origin");
-        if (origin) {
-          triggerRouteCalculation(origin, node, context);
-        }
-      } else if (effectiveMode === "depot") {
-        setDepot(node);
-        setSelectionMode("stop");
-        if (stops.length > 0) {
-          triggerTourOptimization(node, stops, returnToDepot, context);
-        }
-      } else if (effectiveMode === "stop") {
-        if (!depot) {
-          setDepot(node);
-          setSelectionMode("stop");
-        } else if (stops.length < 10) {
-          const newStops = [...stops, node];
-          setStops(newStops);
-          triggerTourOptimization(depot, newStops, returnToDepot, context);
-        }
+      const nextWaypoints = [...waypoints];
+      nextWaypoints[targetIdx] = node;
+      setWaypoints(nextWaypoints);
+
+      // Buscar si queda algún casillero vacío para avanzar automáticamente al siguiente
+      const nextEmptyIdx = nextWaypoints.findIndex((w) => w === null);
+      if (nextEmptyIdx !== -1) {
+        setActiveStopIndex(nextEmptyIdx);
+      } else {
+        // Si todos los casilleros actuales están llenos, avanzamos en ciclo (o al siguiente)
+        const nextCycleIdx =
+          targetIdx + 1 < nextWaypoints.length ? targetIdx + 1 : 0;
+        setActiveStopIndex(nextCycleIdx);
+      }
+
+      // Si ya hay al menos 2 paradas cargadas, calcula la ruta automáticamente
+      if (nextWaypoints.filter((w) => w !== null).length >= 2) {
+        calculateSequentialRoute(nextWaypoints, context);
       }
     },
-    [
-      origin,
-      destination,
-      depot,
-      stops,
-      returnToDepot,
-      context,
-      explicitSelectionButton,
-      triggerRouteCalculation,
-      triggerTourOptimization,
-    ]
+    [activeStopIndex, waypoints, context, calculateSequentialRoute]
   );
 
-  // Pasar directamente a Modo Varias Paradas conservando Origen/Destino si ya había
-  const handleSwitchToMultiStop = useCallback(() => {
-    setAppMode("tour");
-    if (!depot && origin) {
-      const newDepot = origin;
-      const newStops = destination ? [destination] : [];
-      setDepot(newDepot);
-      setStops(newStops);
-      setSelectionMode("stop");
-      if (newStops.length > 0) {
-        triggerTourOptimization(newDepot, newStops, returnToDepot, context);
-      }
-    } else {
-      setSelectionMode(depot ? "stop" : "depot");
-    }
-  }, [depot, origin, destination, returnToDepot, context, triggerTourOptimization]);
+  // Agregar una nueva parada a la lista
+  const handleAddStop = useCallback(() => {
+    if (waypoints.length >= 10) return;
+    const newIdx = waypoints.length;
+    setWaypoints((prev) => [...prev, null]);
+    setActiveStopIndex(newIdx);
+  }, [waypoints.length]);
 
-  // 3 Atajos de Ejemplos Rápidos (usando coordenadas reales para que Dijkstra trace por las calles reales)
+  // Eliminar o limpiar una parada
+  const handleRemoveStop = useCallback(
+    (idx: number) => {
+      let nextWaypoints: (NodeInfo | null)[];
+      if (waypoints.length <= 2) {
+        // Si solo hay 2 casilleros (1 y 2), vaciamos ese casillero y lo dejamos activo
+        nextWaypoints = [...waypoints];
+        nextWaypoints[idx] = null;
+        setWaypoints(nextWaypoints);
+        setActiveStopIndex(idx);
+      } else {
+        // Si hay 3 o más paradas, quitamos la fila y renumeramos
+        nextWaypoints = waypoints.filter((_, i) => i !== idx);
+        setWaypoints(nextWaypoints);
+        setActiveStopIndex((prev) =>
+          Math.min(prev, nextWaypoints.length - 1)
+        );
+      }
+
+      if (nextWaypoints.filter((w) => w !== null).length >= 2) {
+        calculateSequentialRoute(nextWaypoints, context);
+      } else {
+        setRouteResult(null);
+      }
+    },
+    [waypoints, context, calculateSequentialRoute]
+  );
+
+  // Mover una parada de lugar (manteniendo presionadas las tres rayitas ≡)
+  const moveWaypoint = useCallback(
+    (fromIdx: number, toIdx: number) => {
+      if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+      setWaypoints((prev) => {
+        if (fromIdx >= prev.length || toIdx >= prev.length) return prev;
+        const updated = [...prev];
+        const [movedItem] = updated.splice(fromIdx, 1);
+        updated.splice(toIdx, 0, movedItem);
+
+        // Recalcular automáticamente la ruta con el nuevo orden de paradas
+        if (updated.filter((w) => w !== null).length >= 2) {
+          calculateSequentialRoute(updated, context);
+        }
+        return updated;
+      });
+      setActiveStopIndex(toIdx);
+    },
+    [context, calculateSequentialRoute]
+  );
+
+  // Soltar el arrastre al soltar el clic en cualquier parte de la ventana
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (draggingIndexRef.current !== null) {
+        draggingIndexRef.current = null;
+        setDraggingIndex(null);
+      }
+    };
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+  }, []);
+
+  // Limpiar todos los puntos y rutas
+  const handleResetPoints = useCallback(() => {
+    setWaypoints([null, null]);
+    setActiveStopIndex(0);
+    setRouteResult(null);
+    setRouteError(null);
+  }, []);
+
+  // 3 Ejemplos Rápidos de 1 Clic (usando el mismo sistema unificado de paradas numeradas)
   const handleQuickRoutePellegrini = useCallback(() => {
-    setAppMode("route");
-    const orig: NodeInfo = {
+    const p1: NodeInfo = {
       id: 0,
       lat: -32.9554,
       lon: -60.6558,
       label: "Av. Pellegrini y Corrientes",
     };
-    const dest: NodeInfo = {
+    const p2: NodeInfo = {
       id: 0,
       lat: -32.9475,
       lon: -60.6305,
@@ -399,24 +412,22 @@ export const App: React.FC = () => {
       clima: "tormenta",
       es_feriado: false,
     };
-    setOrigin(orig);
-    setDestination(dest);
+    const nextWps = [p1, p2];
+    setWaypoints(nextWps);
+    setActiveStopIndex(0);
     setContext(ctx);
-    setActivePresetId("pico_tarde_tormenta");
-    setSelectionMode("origin");
-    triggerRouteCalculation(orig, dest, ctx);
+    calculateSequentialRoute(nextWps, ctx);
     setFlyToLocation({ lat: -32.9515, lon: -60.643, zoom: 14 });
-  }, [triggerRouteCalculation]);
+  }, [calculateSequentialRoute]);
 
   const handleQuickRouteCircunvalacion = useCallback(() => {
-    setAppMode("route");
-    const orig: NodeInfo = {
+    const p1: NodeInfo = {
       id: 0,
       lat: -32.973,
       lon: -60.68,
       label: "Av. Circunvalación y Av. Pellegrini",
     };
-    const dest: NodeInfo = {
+    const p2: NodeInfo = {
       id: 0,
       lat: -32.9468,
       lon: -60.6393,
@@ -428,94 +439,57 @@ export const App: React.FC = () => {
       clima: "despejado",
       es_feriado: false,
     };
-    setOrigin(orig);
-    setDestination(dest);
+    const nextWps = [p1, p2];
+    setWaypoints(nextWps);
+    setActiveStopIndex(0);
     setContext(ctx);
-    setActivePresetId("pico_manana");
-    setSelectionMode("origin");
-    triggerRouteCalculation(orig, dest, ctx);
+    calculateSequentialRoute(nextWps, ctx);
     setFlyToLocation({ lat: -32.96, lon: -60.66, zoom: 13 });
-  }, [triggerRouteCalculation]);
+  }, [calculateSequentialRoute]);
 
-  const handleQuickRouteTSP = useCallback(() => {
-    setAppMode("tour");
-    const dep: NodeInfo = {
-      id: 0,
-      lat: -32.9377,
-      lon: -60.6728,
-      label: "Depósito Central (Terminal de Ómnibus)",
-    };
-    const stps: NodeInfo[] = [
+  const handleQuickRouteMultiStop = useCallback(() => {
+    const nextWps: NodeInfo[] = [
+      {
+        id: 0,
+        lat: -32.9377,
+        lon: -60.6728,
+        label: "Terminal de Ómnibus (Cafferata)",
+      },
       {
         id: 0,
         lat: -32.9554,
         lon: -60.6558,
-        label: "Cliente 1 · Pellegrini y Corrientes",
-      },
-      {
-        id: 0,
-        lat: -32.9475,
-        lon: -60.6305,
-        label: "Cliente 2 · Monumento a la Bandera",
+        label: "Av. Pellegrini y Corrientes",
       },
       {
         id: 0,
         lat: -32.9468,
         lon: -60.6393,
-        label: "Cliente 3 · Bv. Oroño y Córdoba",
+        label: "Bv. Oroño y Córdoba",
       },
       {
         id: 0,
-        lat: -32.943,
-        lon: -60.665,
-        label: "Cliente 4 · Santa Fe y Avellaneda",
+        lat: -32.9475,
+        lon: -60.6305,
+        label: "Monumento a la Bandera",
       },
     ];
-    setDepot(dep);
-    setStops(stps);
-    setReturnToDepot(true);
-    setSelectionMode("stop");
-    triggerTourOptimization(dep, stps, true, context);
-    setFlyToLocation({ lat: -32.945, lon: -60.655, zoom: 13 });
-  }, [context, triggerTourOptimization]);
+    setWaypoints(nextWps);
+    setActiveStopIndex(0);
+    calculateSequentialRoute(nextWps, context);
+    setFlyToLocation({ lat: -32.948, lon: -60.65, zoom: 13 });
+  }, [context, calculateSequentialRoute]);
 
-  // Limpiar todos los puntos y rutas
-  const handleResetPoints = useCallback(() => {
-    setOrigin(null);
-    setDestination(null);
-    setDepot(null);
-    setStops([]);
-    setRouteResult(null);
-    setTourResult(null);
-    setRouteError(null);
-    setSelectionMode(appMode === "route" ? "origin" : "depot");
-  }, [appMode]);
-
-  // Cambiar modo de aplicación
-  const handleAppModeChange = useCallback(
-    (mode: "route" | "tour") => {
-      if (mode === "tour") {
-        handleSwitchToMultiStop();
-      } else {
-        setAppMode("route");
-        setSelectionMode("origin");
-      }
-    },
-    [handleSwitchToMultiStop]
-  );
+  const hasAnyStop = waypoints.some((w) => w !== null);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
-      {/* Mapa interactivo con Leaflet Canvas y Esri Dark Gray Base */}
+      {/* Mapa interactivo con paradas numeradas y rutas de alto contraste */}
       <MapViewer
         context={context}
-        origin={origin}
-        destination={destination}
-        depot={depot}
-        stops={stops}
+        waypoints={waypoints}
+        activeStopIndex={activeStopIndex}
         routeResult={routeResult}
-        tourResult={tourResult}
-        selectionMode={selectionMode}
         showTrafficLayer={showTrafficLayer}
         showStaticRoute={showStaticRoute}
         showDynamicRoute={showDynamicRoute}
@@ -530,31 +504,31 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsSidebarOpen(true)}
-            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/95 px-3.5 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-emerald-500/50 hover:bg-slate-800"
+            className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/95 px-3.5 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-md transition hover:border-cyan-500/50 hover:bg-slate-800"
             title="Mostrar panel de control"
           >
-            <PanelLeftOpen className="h-4 w-4 text-emerald-400" />
+            <PanelLeftOpen className="h-4 w-4 text-cyan-400" />
             <span>Mostrar Controles</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsBenchmarkOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2.5 text-xs font-semibold text-slate-200 shadow-2xl backdrop-blur-md transition hover:border-emerald-500/50 hover:bg-slate-800"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2.5 text-xs font-semibold text-slate-200 shadow-2xl backdrop-blur-md transition hover:border-cyan-500/50 hover:bg-slate-800"
           >
-            <BarChart3 className="h-4 w-4 text-emerald-400" />
+            <BarChart3 className="h-4 w-4 text-cyan-400" />
             <span>Auditoría ML</span>
           </button>
         </div>
       )}
 
-      {/* Barra Lateral Flotante de Control (Ocultable y Simplificada) */}
+      {/* Barra Lateral Flotante de Control (Ocultable y Simplificada estilo Google Maps) */}
       {isSidebarOpen && (
         <aside className="pointer-events-auto absolute left-4 top-4 bottom-4 z-[500] flex w-96 flex-col gap-2.5 overflow-y-auto pr-1">
           {/* 1. Cabecera Principal con botón de Ocultar Panel */}
           <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400">
                 <Navigation className="h-5 w-5" />
               </div>
               <div>
@@ -573,11 +547,11 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsBenchmarkOpen(true)}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/90 px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-emerald-500/50 hover:bg-slate-700 hover:text-white"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/90 px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-cyan-500/50 hover:bg-slate-700 hover:text-white"
                 title="Abrir auditoría científica de Machine Learning"
                 data-testid="open-benchmark-btn"
               >
-                <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />
+                <BarChart3 className="h-3.5 w-3.5 text-cyan-400" />
                 <span>Auditoría</span>
               </button>
 
@@ -592,163 +566,169 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Selector Rápido de Modo arriba del todo: 2 Puntos vs Varias Paradas */}
-          <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md text-xs">
-            <button
-              type="button"
-              onClick={() => handleAppModeChange("route")}
-              className={`flex items-center justify-center gap-1.5 rounded-xl py-2 font-semibold transition ${
-                appMode === "route"
-                  ? "bg-emerald-500 text-slate-950 shadow-md"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              <Route className="h-4 w-4" />
-              <span>Ruta Simple (2 Puntos)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAppModeChange("tour")}
-              className={`flex items-center justify-center gap-1.5 rounded-xl py-2 font-semibold transition ${
-                appMode === "tour"
-                  ? "bg-emerald-500 text-slate-950 shadow-md"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              <Truck className="h-4 w-4" />
-              <span>Varias Paradas (+3)</span>
-            </button>
-          </div>
+          {/* 2. Lista Unificada de Paradas Numeradas (con 3 rayitas ≡ para arrastrar y reordenar) */}
+          <div className="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-semibold text-slate-200">
+                📍 Paradas del recorrido (clic en el mapa)
+              </span>
+              {hasAnyStop && (
+                <button
+                  type="button"
+                  onClick={handleResetPoints}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-400 hover:text-rose-300"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span>Reiniciar</span>
+                </button>
+              )}
+            </div>
 
-          {/* 2. Selección de Puntos en el Mapa (Origen y Destino) */}
-          {appMode === "route" && (
-            <div className="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-slate-200">
-                  📍 Seleccioná 2 esquinas haciendo clic en el mapa
-                </span>
-                {(origin || destination) && (
-                  <button
-                    type="button"
-                    onClick={handleResetPoints}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-400 hover:text-rose-300"
+            {/* Lista de Paradas Numeradas Reordenables */}
+            <div className="flex flex-col gap-1.5 select-none">
+              {waypoints.map((wp, idx) => {
+                const isSelected = activeStopIndex === idx;
+                const isDragging = draggingIndex === idx;
+                const isFirst = idx === 0;
+                const isLast = idx === waypoints.length - 1 && waypoints.length > 1;
+                const roleLabel = isFirst
+                  ? "Origen"
+                  : isLast
+                  ? "Destino"
+                  : `Parada intermedia`;
+
+                const badgeBg = isFirst
+                  ? "bg-cyan-500 text-slate-950"
+                  : isLast
+                  ? "bg-rose-500 text-white"
+                  : "bg-purple-500 text-white";
+
+                return (
+                  <div
+                    key={`stop-row-${idx}`}
+                    draggable
+                    onDragStart={(e) => {
+                      draggingIndexRef.current = idx;
+                      setDraggingIndex(idx);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (
+                        draggingIndexRef.current !== null &&
+                        draggingIndexRef.current !== idx
+                      ) {
+                        const from = draggingIndexRef.current;
+                        draggingIndexRef.current = idx;
+                        setDraggingIndex(idx);
+                        moveWaypoint(from, idx);
+                      }
+                    }}
+                    onDragEnd={() => {
+                      draggingIndexRef.current = null;
+                      setDraggingIndex(null);
+                    }}
+                    onMouseEnter={() => {
+                      if (
+                        draggingIndexRef.current !== null &&
+                        draggingIndexRef.current !== idx
+                      ) {
+                        const from = draggingIndexRef.current;
+                        draggingIndexRef.current = idx;
+                        setDraggingIndex(idx);
+                        moveWaypoint(from, idx);
+                      }
+                    }}
+                    className={`flex items-center gap-2 rounded-xl border p-2 text-xs transition ${
+                      isDragging
+                        ? "border-cyan-400 bg-cyan-500/20 shadow-lg opacity-90"
+                        : isSelected
+                        ? "border-cyan-500 bg-cyan-500/15 text-white shadow-sm"
+                        : "border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700"
+                    }`}
                   >
-                    <RotateCcw className="h-3 w-3" />
-                    <span>Borrar</span>
-                  </button>
-                )}
-              </div>
+                    {/* Tres rayitas (≡) para mantener apretado y mover la parada de lugar */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        draggingIndexRef.current = idx;
+                        setDraggingIndex(idx);
+                      }}
+                      className="flex cursor-grab active:cursor-grabbing items-center justify-center rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-cyan-300"
+                      title="Mantené presionadas las 3 rayitas y arrastrá hacia arriba o abajo para cambiar el orden"
+                    >
+                      <Menu className="h-4 w-4" />
+                    </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExplicitSelectionButton(true);
-                    setSelectionMode("origin");
-                  }}
-                  data-testid="select-origin-btn"
-                  className={`flex items-center gap-2 rounded-xl border p-2.5 text-left transition ${
-                    selectionMode === "origin"
-                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-200 shadow-md"
-                      : "border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700"
-                  }`}
-                >
-                  <MapPin className="h-4 w-4 shrink-0 text-emerald-400" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
-                      1. Origen (Verde)
-                    </div>
-                    <div className="truncate font-medium text-white">
-                      {origin ? origin.label : "Clic en el mapa..."}
-                    </div>
+                    {/* Botón principal de la fila con el número de parada y nombre de esquina */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveStopIndex(idx)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold shadow-sm ${badgeBg}`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Parada {idx + 1} · {roleLabel}
+                        </div>
+                        <div className="truncate font-medium text-white">
+                          {wp
+                            ? wp.label
+                            : isSelected
+                            ? "Hacé clic en el mapa para ubicar..."
+                            : "Sin definir (clic para elegir)"}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Botón para quitar parada o vaciar casillero */}
+                    {(waypoints.length > 2 || wp !== null) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveStop(idx);
+                        }}
+                        className="rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-rose-400 transition"
+                        title={
+                          waypoints.length > 2
+                            ? "Eliminar esta parada"
+                            : "Limpiar esquina"
+                        }
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
-                </button>
+                );
+              })}
+            </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExplicitSelectionButton(true);
-                    setSelectionMode("destination");
-                  }}
-                  data-testid="select-dest-btn"
-                  className={`flex items-center gap-2 rounded-xl border p-2.5 text-left transition ${
-                    selectionMode === "destination"
-                      ? "border-rose-500 bg-rose-500/20 text-rose-200 shadow-md"
-                      : "border-slate-800 bg-slate-950/70 text-slate-300 hover:border-slate-700"
-                  }`}
-                >
-                  <MapPin className="h-4 w-4 shrink-0 text-rose-400" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-rose-400">
-                      2. Destino (Rojo)
-                    </div>
-                    <div className="truncate font-medium text-white">
-                      {destination ? destination.label : "Clic en el mapa..."}
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              {/* Botón directo para sumar más paradas en el mapa */}
+            {/* Botón directo para agregar una parada más */}
+            {waypoints.length < 10 && (
               <button
                 type="button"
-                onClick={handleSwitchToMultiStop}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                onClick={handleAddStop}
+                data-testid="add-stop-btn"
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-cyan-500/50 bg-cyan-500/10 py-2 text-xs font-semibold text-cyan-300 transition hover:border-cyan-400 hover:bg-cyan-500/20"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>Agregar más paradas en el mapa (Multiparada)</span>
+                <span>Agregar parada (#{waypoints.length + 1})</span>
               </button>
+            )}
 
-              {/* Buscador opcional por nombre de calle */}
-              <StreetSearch
-                onSelectCorner={(node, mode) => {
-                  setExplicitSelectionButton(true);
-                  handleNodeSelected(node, mode);
-                }}
-                onFlyTo={(coords) => setFlyToLocation(coords)}
-              />
-            </div>
-          )}
-
-          {/* Gestor de Paradas en Modo Ronda TSP */}
-          {appMode === "tour" && (
-            <StopsManager
-              depot={depot}
-              stops={stops}
-              selectionMode={selectionMode}
-              onSetSelectionMode={setSelectionMode}
-              onRemoveStop={(idx) => {
-                const updated = stops.filter((_, i) => i !== idx);
-                setStops(updated);
-                if (depot && updated.length > 0) {
-                  triggerTourOptimization(depot, updated, returnToDepot, context);
-                } else {
-                  setTourResult(null);
-                }
+            {/* Buscador opcional por nombre de calle */}
+            <StreetSearch
+              onSelectCorner={(node) => {
+                handleNodeSelected(node);
               }}
-              onClearStops={() => {
-                setDepot(null);
-                setStops([]);
-                setTourResult(null);
-                setSelectionMode("depot");
-              }}
-              returnToDepot={returnToDepot}
-              onToggleReturnToDepot={() => {
-                const nextRet = !returnToDepot;
-                setReturnToDepot(nextRet);
-                if (depot && stops.length > 0) {
-                  triggerTourOptimization(depot, stops, nextRet, context);
-                }
-              }}
-              onOptimizeTour={() => {
-                if (depot) {
-                  triggerTourOptimization(depot, stops, returnToDepot, context);
-                }
-              }}
-              isCalculating={isCalculating}
-              tourResult={tourResult}
+              onFlyTo={(coords) => setFlyToLocation(coords)}
             />
-          )}
+          </div>
 
           {routeError && (
             <div className="rounded-xl border border-rose-500/40 bg-rose-950/60 p-3 text-xs text-rose-200">
@@ -759,21 +739,22 @@ export const App: React.FC = () => {
           {/* 3. Tarjeta de Métricas y Comparación (aparece cuando hay ruta calculada) */}
           <MetricsCard
             routeResult={routeResult}
-            tourResult={tourResult}
-            appMode={appMode}
+            tourResult={null}
+            appMode="route"
             isCalculating={isCalculating}
             onClear={handleResetPoints}
           />
 
-          {/* 4. Panel de Control Contextual (Hora, Día, Clima y Capas siempre visibles, sin Presets) */}
+          {/* 4. Panel de Control Contextual (Hora, Día, Clima y Capas siempre visibles, sin selector de modo ni Presets) */}
           <ControlPanel
             context={context}
             onContextChange={handleContextChange}
-            activePresetId={activePresetId}
-            onApplyPreset={handleApplyPreset}
+            activePresetId={null}
+            onApplyPreset={() => {}}
             presets={[]}
-            appMode={appMode}
-            onAppModeChange={handleAppModeChange}
+            appMode="route"
+            onAppModeChange={() => {}}
+            hideModeSwitch={true}
             showTrafficLayer={showTrafficLayer}
             onToggleTrafficLayer={() => setShowTrafficLayer((p) => !p)}
             showStaticRoute={showStaticRoute}
@@ -792,14 +773,14 @@ export const App: React.FC = () => {
                 <Zap className="h-3 w-3" />
                 <span>Ejemplos de Ruta Prearmados (Opcional)</span>
               </span>
-              <span className="text-[9px] text-emerald-400 font-mono">1 CLIC</span>
+              <span className="text-[9px] text-cyan-400 font-mono">1 CLIC</span>
             </div>
             <div className="grid grid-cols-3 gap-1.5 text-left">
               <button
                 type="button"
                 onClick={handleQuickRoutePellegrini}
                 data-testid="quick-route-pellegrini"
-                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
+                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-cyan-500/50 hover:bg-slate-800/60"
                 title="Pellegrini ➔ Monumento (Hora pico con tormenta)"
               >
                 <div className="flex items-center gap-1 text-amber-400 text-xs">
@@ -817,7 +798,7 @@ export const App: React.FC = () => {
                 type="button"
                 onClick={handleQuickRouteCircunvalacion}
                 data-testid="quick-route-circunvalacion"
-                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
+                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-cyan-500/50 hover:bg-slate-800/60"
                 title="Circunvalación ➔ Microcentro (Acceso perimetral rápido)"
               >
                 <div className="flex items-center gap-1 text-sky-400 text-xs">
@@ -833,19 +814,19 @@ export const App: React.FC = () => {
 
               <button
                 type="button"
-                onClick={handleQuickRouteTSP}
+                onClick={handleQuickRouteMultiStop}
                 data-testid="quick-route-tsp"
-                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-slate-800/60"
-                title="Ronda 4 Clientes (TSP 2-opt con retorno a depósito)"
+                className="flex flex-col justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-2 text-left transition hover:border-cyan-500/50 hover:bg-slate-800/60"
+                title="Recorrido con 4 paradas encadenadas (1 ➔ 2 ➔ 3 ➔ 4)"
               >
                 <div className="flex items-center gap-1 text-purple-400 text-xs">
                   <Package className="h-3.5 w-3.5 shrink-0" />
                   <span className="font-bold text-[11px] text-slate-200">
-                    4 Clientes
+                    4 Paradas
                   </span>
                 </div>
                 <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
-                  TSP 2-opt
+                  1 ➔ 2 ➔ 3 ➔ 4
                 </div>
               </button>
             </div>

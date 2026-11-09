@@ -35,6 +35,8 @@ export interface MapViewerProps {
   destination?: NodeInfo | null;
   depot?: NodeInfo | null;
   stops?: NodeInfo[];
+  waypoints?: (NodeInfo | null)[];
+  activeStopIndex?: number;
   routeResult?: RouteResponse | null;
   tourResult?: TourResponse | null;
   selectionMode?: SelectionMode;
@@ -182,6 +184,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   destination = null,
   depot = null,
   stops = [],
+  waypoints,
+  activeStopIndex,
   routeResult = null,
   tourResult = null,
   selectionMode = "origin",
@@ -344,107 +348,135 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </Polyline>
           ))}
 
-        {/* Static Route Polyline (Dashed Blue/Slate) */}
+        {/* Static Route Polyline (Dashed Bright Violet with dark casing for high contrast) */}
         {staticRoutePositions.length > 1 && (
-          <Polyline
-            positions={staticRoutePositions}
-            pathOptions={{
-              color: "#60A5FA",
-              weight: 5,
-              opacity: 0.85,
-              dashArray: "10, 8",
-            }}
-          >
-            <Tooltip sticky>
-              Ruta Estática (Flujo libre sin ML)
-            </Tooltip>
-          </Polyline>
+          <>
+            <Polyline
+              positions={staticRoutePositions}
+              pathOptions={{
+                color: "#020617",
+                weight: 8,
+                opacity: 0.75,
+              }}
+            />
+            <Polyline
+              positions={staticRoutePositions}
+              pathOptions={{
+                color: "#C084FC",
+                weight: 4.5,
+                opacity: 0.95,
+                dashArray: "10, 8",
+              }}
+            >
+              <Tooltip sticky>
+                Ruta Clásica (Menor distancia en metros)
+              </Tooltip>
+            </Polyline>
+          </>
         )}
 
-        {/* Dynamic ML Route Polyline (Solid Emerald) */}
+        {/* Dynamic ML Route Polyline (Electric Cyan with dark outer casing so it never camouflages with green streets) */}
         {dynamicRoutePositions.length > 1 && (
-          <Polyline
-            positions={dynamicRoutePositions}
+          <>
+            <Polyline
+              positions={dynamicRoutePositions}
+              pathOptions={{
+                color: "#020617",
+                weight: 10,
+                opacity: 0.85,
+              }}
+            />
+            <Polyline
+              positions={dynamicRoutePositions}
+              pathOptions={{
+                color: "#00F0FF",
+                weight: 5.5,
+                opacity: 1.0,
+              }}
+            >
+              <Tooltip sticky>
+                Ruta IA Dinámica (Más rápida según Árbol de Decisión + Dijkstra)
+              </Tooltip>
+            </Polyline>
+          </>
+        )}
+
+        {/* Unified Numbered Waypoints (1, 2, 3...) when waypoints prop is provided */}
+        {waypoints &&
+          waypoints.map((wp, idx) => {
+            if (!wp) return null;
+            const isFirst = idx === 0;
+            const isLast =
+              idx === waypoints.length - 1 && waypoints.filter(Boolean).length > 1;
+            const fillColor = isFirst
+              ? "#06B6D4"
+              : isLast
+              ? "#F43F5E"
+              : "#8B5CF6";
+            return (
+              <CircleMarker
+                key={`wp-${idx}-${wp.id}-${wp.lat}-${wp.lon}`}
+                center={[wp.lat, wp.lon]}
+                radius={12}
+                pathOptions={{
+                  color: "#ffffff",
+                  weight: 2.5,
+                  fillColor,
+                  fillOpacity: 1,
+                }}
+              >
+                <Tooltip
+                  permanent
+                  direction="center"
+                  className="waypoint-number-badge"
+                >
+                  <span>{idx + 1}</span>
+                </Tooltip>
+              </CircleMarker>
+            );
+          })}
+
+        {/* Legacy Origin/Destination Markers (used only when waypoints prop is not provided) */}
+        {!waypoints && origin && (
+          <CircleMarker
+            center={[origin.lat, origin.lon]}
+            radius={9}
             pathOptions={{
-              color: "#10B981",
-              weight: 6,
-              opacity: 0.95,
+              color: "#ffffff",
+              weight: 2.5,
+              fillColor: "#06B6D4",
+              fillOpacity: 1,
             }}
           >
-            <Tooltip sticky>
-              Ruta IA Dinámica (Árbol de Decisión + Dijkstra)
+            <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+              <span className="font-semibold text-cyan-700">
+                Origen: {origin.label}
+              </span>
             </Tooltip>
-          </Polyline>
+          </CircleMarker>
         )}
 
-        {/* Origin Marker with pulse aura */}
-        {origin && (
-          <>
-            <CircleMarker
-              center={[origin.lat, origin.lon]}
-              radius={16}
-              pathOptions={{
-                color: "#10B981",
-                weight: 1.5,
-                fillColor: "#10B981",
-                fillOpacity: 0.22,
-                className: "animate-ping origin-center",
-              }}
-            />
-            <CircleMarker
-              center={[origin.lat, origin.lon]}
-              radius={8}
-              pathOptions={{
-                color: "#ffffff",
-                weight: 2.5,
-                fillColor: "#10B981",
-                fillOpacity: 1,
-              }}
-            >
-              <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
-                <span className="font-semibold text-emerald-700">
-                  Origen: {origin.label}
-                </span>
-              </Tooltip>
-            </CircleMarker>
-          </>
-        )}
-
-        {/* Destination Marker with pulse aura */}
-        {destination && (
-          <>
-            <CircleMarker
-              center={[destination.lat, destination.lon]}
-              radius={16}
-              pathOptions={{
-                color: "#EF4444",
-                weight: 1.5,
-                fillColor: "#EF4444",
-                fillOpacity: 0.22,
-                className: "animate-ping origin-center",
-              }}
-            />
-            <CircleMarker
-              center={[destination.lat, destination.lon]}
-              radius={8}
-              pathOptions={{
-                color: "#ffffff",
-                weight: 2.5,
-                fillColor: "#EF4444",
-                fillOpacity: 1,
-              }}
-            >
-              <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
-                <span className="font-semibold text-rose-700">
-                  Destino: {destination.label}
-                </span>
-              </Tooltip>
-            </CircleMarker>
-          </>
+        {!waypoints && destination && (
+          <CircleMarker
+            center={[destination.lat, destination.lon]}
+            radius={9}
+            pathOptions={{
+              color: "#ffffff",
+              weight: 2.5,
+              fillColor: "#F43F5E",
+              fillOpacity: 1,
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+              <span className="font-semibold text-rose-700">
+                Destino: {destination.label}
+              </span>
+            </Tooltip>
+          </CircleMarker>
         )}
 
         {/* Depot Marker (for Multi-stop Tour) */}
-        {depot && (
+        {!waypoints && depot && (
           <CircleMarker
             center={[depot.lat, depot.lon]}
             radius={9}
@@ -464,67 +496,49 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         )}
 
         {/* Multi-stop Tour Waypoints */}
-        {stops.map((stop, idx) => (
-          <CircleMarker
-            key={`${stop.id}-${idx}`}
-            center={[stop.lat, stop.lon]}
-            radius={8}
-            pathOptions={{
-              color: "#ffffff",
-              weight: 2,
-              fillColor: "#F59E0B",
-              fillOpacity: 1,
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
-              <span className="font-semibold text-amber-800">
-                #{idx + 1} · {stop.label}
-              </span>
-            </Tooltip>
-          </CircleMarker>
-        ))}
+        {!waypoints &&
+          stops.map((stop, idx) => (
+            <CircleMarker
+              key={`${stop.id}-${idx}`}
+              center={[stop.lat, stop.lon]}
+              radius={8}
+              pathOptions={{
+                color: "#ffffff",
+                weight: 2,
+                fillColor: "#F59E0B",
+                fillOpacity: 1,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+                <span className="font-semibold text-amber-800">
+                  #{idx + 1} · {stop.label}
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          ))}
 
       </MapContainer>
 
       {/* Top-center Interactive Click Helper Pill */}
       <div className="pointer-events-none absolute left-1/2 top-4 z-[500] -translate-x-1/2">
         <div className="flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/95 px-4 py-1.5 text-xs font-medium text-slate-100 shadow-xl backdrop-blur-md">
-          {(selectionMode || "origin") === "origin" && (
+          {activeStopIndex !== undefined ? (
             <>
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-bold text-slate-950">
+                {activeStopIndex + 1}
+              </span>
               <span>
-                Hacé clic en el mapa para marcar el{" "}
-                <strong className="text-emerald-400">ORIGEN (Verde)</strong>
+                Hacé clic en el mapa para ubicar la{" "}
+                <strong className="text-cyan-400">
+                  PARADA #{activeStopIndex + 1}
+                </strong>
               </span>
             </>
-          )}
-          {selectionMode === "destination" && (
+          ) : (
             <>
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-400 animate-pulse" />
+              <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse" />
               <span>
-                Ahora hacé clic en el mapa para marcar el{" "}
-                <strong className="text-rose-400">DESTINO (Rojo)</strong>
-              </span>
-            </>
-          )}
-          {selectionMode === "depot" && (
-            <>
-              <span className="h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse" />
-              <span>
-                1.º Clic en el mapa: marcá el{" "}
-                <strong className="text-blue-400">PUNTO DE SALIDA (Depósito)</strong>
-              </span>
-            </>
-          )}
-          {selectionMode === "stop" && (
-            <>
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />
-              <span>
-                Clic en el mapa: agregar{" "}
-                <strong className="text-amber-400">
-                  PARADA #{stops.length + 1}
-                </strong>{" "}
-                (la ruta se actualiza sola)
+                Hacé clic en el mapa para marcar un punto del recorrido
               </span>
             </>
           )}
@@ -576,15 +590,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
         <div className="mt-1 flex flex-col gap-1 border-t border-slate-800 pt-2 text-[11px]">
           <div className="flex items-center gap-2">
-            <span className="inline-block h-1 w-5 rounded bg-emerald-500" />
-            <span className="text-emerald-300 font-medium">
-              Línea Verde sólida: Ruta IA (Más rápida por calles)
+            <span className="inline-block h-1.5 w-5 rounded bg-cyan-400 shadow-[0_0_6px_#00f0ff]" />
+            <span className="text-cyan-300 font-semibold">
+              Línea Cian sólida: Ruta IA (Más rápida)
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="inline-block h-0.5 w-5 border-b-2 border-dashed border-blue-400" />
-            <span className="text-blue-300 font-medium">
-              Línea Azul punteada: Ruta Clásica (Menor distancia)
+            <span className="inline-block h-0.5 w-5 border-b-2 border-dashed border-purple-400" />
+            <span className="text-purple-300 font-medium">
+              Línea Violeta punteada: Ruta Clásica (Menor distancia)
             </span>
           </div>
         </div>

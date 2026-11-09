@@ -49,3 +49,22 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Numbered waypoint badge inside CircleMarker */
+.leaflet-tooltip.waypoint-number-badge {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  pointer-events: none !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.leaflet-tooltip.waypoint-number-badge::before {
+  display: none !important;
+}

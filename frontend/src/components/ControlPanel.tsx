@@ -38,6 +38,7 @@ export interface ControlPanelProps {
   isCalculating?: boolean;
   onResetPoints?: () => void;
   onUseCurrentTime?: () => void;
+  hideModeSwitch?: boolean;
 }
 
 const DIAS: { key: DiaSemanaType; label: string }[] = [
@@ -81,6 +82,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   isCalculating,
   onResetPoints,
   onUseCurrentTime,
+  hideModeSwitch = false,
 }) => {
   const isRushHour =
     !context.es_feriado &&
@@ -112,35 +114,37 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       data-testid="control-panel"
       className="flex flex-col gap-2.5 rounded-2xl border border-slate-800 bg-slate-900/95 p-3 text-slate-200 shadow-2xl backdrop-blur-md"
     >
-      {/* Selector de Modo: Ruta vs Ronda TSP */}
-      <div className="flex rounded-xl bg-slate-950/80 p-1 text-xs">
-        <button
-          type="button"
-          onClick={() => onAppModeChange("route")}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 font-medium transition ${
-            appMode === "route"
-              ? "bg-emerald-500 text-slate-950 shadow-md font-semibold"
-              : "text-slate-400 hover:text-slate-200"
-          }`}
-          data-testid="mode-route-btn"
-        >
-          <Route className="h-3.5 w-3.5" />
-          <span>Ruta A ➔ B</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onAppModeChange("tour")}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 font-medium transition ${
-            appMode === "tour"
-              ? "bg-emerald-500 text-slate-950 shadow-md font-semibold"
-              : "text-slate-400 hover:text-slate-200"
-          }`}
-          data-testid="mode-tour-btn"
-        >
-          <Truck className="h-3.5 w-3.5" />
-          <span>Ronda TSP 2-opt</span>
-        </button>
-      </div>
+      {/* Selector de Modo: sólo visible si no está oculto */}
+      {!hideModeSwitch && (
+        <div className="flex rounded-xl bg-slate-950/80 p-1 text-xs">
+          <button
+            type="button"
+            onClick={() => onAppModeChange("route")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 font-medium transition ${
+              appMode === "route"
+                ? "bg-emerald-500 text-slate-950 shadow-md font-semibold"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+            data-testid="mode-route-btn"
+          >
+            <Route className="h-3.5 w-3.5" />
+            <span>Ruta A ➔ B</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onAppModeChange("tour")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 font-medium transition ${
+              appMode === "tour"
+                ? "bg-emerald-500 text-slate-950 shadow-md font-semibold"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+            data-testid="mode-tour-btn"
+          >
+            <Truck className="h-3.5 w-3.5" />
+            <span>Ronda TSP 2-opt</span>
+          </button>
+        </div>
+      )}
 
       {/* Slider de Hora Continua */}
       <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
@@ -318,13 +322,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             data-testid="toggle-dynamic-route"
             className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 transition ${
               showDynamicRoute
-                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300 font-medium"
+                ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300 font-medium"
                 : "border-slate-800 bg-slate-900 text-slate-500"
             }`}
           >
             <span
               className={`h-2 w-2 rounded-full ${
-                showDynamicRoute ? "bg-emerald-400" : "bg-slate-600"
+                showDynamicRoute ? "bg-cyan-400" : "bg-slate-600"
               }`}
             />
             <span>Ruta IA</span>
@@ -336,13 +340,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             data-testid="toggle-static-route"
             className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 transition ${
               showStaticRoute
-                ? "border-blue-500/40 bg-blue-500/15 text-blue-300 font-medium"
+                ? "border-purple-500/40 bg-purple-500/15 text-purple-300 font-medium"
                 : "border-slate-800 bg-slate-900 text-slate-500"
             }`}
           >
             <span
               className={`h-2 w-2 rounded-full ${
-                showStaticRoute ? "bg-blue-400" : "bg-slate-600"
+                showStaticRoute ? "bg-purple-400" : "bg-slate-600"
               }`}
             />
             <span>Ruta Metros</span>

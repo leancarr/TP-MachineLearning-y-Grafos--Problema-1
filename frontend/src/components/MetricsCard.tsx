@@ -104,9 +104,9 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
         {/* Comparativa Cara a Cara */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           {/* Ruta Dinámica ML */}
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-2.5">
-            <div className="flex items-center gap-1.5 font-semibold text-emerald-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm" />
+          <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-2.5">
+            <div className="flex items-center gap-1.5 font-semibold text-cyan-300">
+              <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_6px_#00f0ff]" />
               <span>Ruta Dinámica (IA)</span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1">
@@ -122,9 +122,9 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
           </div>
 
           {/* Ruta Estática (Distancia) */}
-          <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-2.5">
-            <div className="flex items-center gap-1.5 font-semibold text-blue-300">
-              <span className="h-2 w-2 rounded-full bg-blue-400 shadow-sm" />
+          <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-2.5">
+            <div className="flex items-center gap-1.5 font-semibold text-purple-300">
+              <span className="h-2 w-2 rounded-full bg-purple-400 shadow-sm" />
               <span>Ruta Estática (Metros)</span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1">
