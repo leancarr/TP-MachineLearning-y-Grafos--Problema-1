@@ -1,0 +1,104 @@
+{
+  "model_name": "Ridge",
+  "hyperparameters": {
+    "alpha": 1.0,
+    "random_state": 42
+  },
+  "train_metrics": {
+    "mae_seg": 2.87,
+    "rmse_seg": 6.8407,
+    "r2_score": 0.7626
+  },
+  "test_metrics": {
+    "mae_seg": 2.8595,
+    "rmse_seg": 6.1912,
+    "r2_score": 0.776
+  },
+  "overfitting_gap_r2": 0.0134,
+  "train_time_sec": 0.2795,
+  "inference_1k_ms": 0.3757,
+  "intercept": 17.8767,
+  "coefficients": [
+    {
+      "feature": "longitud_m",
+      "coefficient": 11.8459
+    },
+    {
+      "feature": "clima_tormenta",
+      "coefficient": 7.7238
+    },
+    {
+      "feature": "velocidad_promedio_historica",
+      "coefficient": -4.5203
+    },
+    {
+      "feature": "clima_despejado",
+      "coefficient": -4.4843
+    },
+    {
+      "feature": "clima_nublado",
+      "coefficient": -4.2333
+    },
+    {
+      "feature": "jerarquia_osm",
+      "coefficient": -2.3667
+    },
+    {
+      "feature": "tipo_calle_avenida",
+      "coefficient": 2.1227
+    },
+    {
+      "feature": "tipo_calle_residencial",
+      "coefficient": -2.0282
+    },
+    {
+      "feature": "dia_semana_sabado",
+      "coefficient": -1.635
+    },
+    {
+      "feature": "dia_semana_domingo",
+      "coefficient": -1.5667
+    },
+    {
+      "feature": "tipo_calle_circunvalacion",
+      "coefficient": -1.1147
+    },
+    {
+      "feature": "tipo_calle_comercial",
+      "coefficient": 1.0202
+    },
+    {
+      "feature": "clima_lluvia",
+      "coefficient": 0.9938
+    },
+    {
+      "feature": "dia_semana_miercoles",
+      "coefficient": 0.7156
+    },
+    {
+      "feature": "dia_semana_viernes",
+      "coefficient": 0.6774
+    },
+    {
+      "feature": "dia_semana_lunes",
+      "coefficient": 0.6771
+    },
+    {
+      "feature": "dia_semana_jueves",
+      "coefficient": 0.5891
+    },
+    {
+      "feature": "dia_semana_martes",
+      "coefficient": 0.5424
+    },
+    {
+      "feature": "es_feriado",
+      "coefficient": -0.3948
+    },
+    {
+      "feature": "hora_dia",
+      "coefficient": 0.0147
+    }
+  ],
+  "theoretical_limitation": "La Regresión Lineal con regularización L2 (Ridge) modela el tiempo de viaje como una combinación lineal aditiva de las features: y_hat = w_0 + sum(w_i * x_i). Esto presenta dos limitaciones estructurales frente a la dinámica urbana de Rosario: (1) No-monotonía horaria (curva bimodal): la variable numérica `hora_dia` (0 a 23.99) posee dos picos de congestión (07:30-09:30 y 17:30-19:30) separados por valles de flujo medio al mediodía y flujo libre a la madrugada; una única pendiente lineal w_hora * hora_dia es incapaz de subir, bajar y volver a subir sin ingeniería manual de splines o bines horarios. (2) Interacción multiplicativa entre longitud, jerarquía y clima: el impacto de una tormenta o de la hora pico escala proporcionalmente al tiempo físico base (longitud / velocidad) y se concentra en avenidas y arterias comerciales, mientras que un modelo lineal suma segundos fijos independientemente de si la cuadra mide 30 m o 400 m."
+}

@@ -1,0 +1,91 @@
+{
+  "status": "PASSED",
+  "rows_count": 100000,
+  "total_nulls": 0,
+  "nulls_by_column": {
+    "tramo_id": 0,
+    "hora_dia": 0,
+    "dia_semana": 0,
+    "clima": 0,
+    "es_feriado": 0,
+    "tipo_calle": 0,
+    "jerarquia_osm": 0,
+    "longitud_m": 0,
+    "velocidad_promedio_historica": 0,
+    "tiempo_real_viaje": 0
+  },
+  "travel_time_sec": {
+    "min": 0.5,
+    "p25": 7.3,
+    "median": 11.78,
+    "mean": 14.026,
+    "p75": 16.94,
+    "p95": 32.15,
+    "max": 569.59
+  },
+  "implied_speed_kmh": {
+    "p01": 10.15,
+    "median": 29.38,
+    "mean": 29.3,
+    "p99": 56.7,
+    "within_3_to_90_kmh": true
+  },
+  "causal_Validation": {
+    "mean_by_weather_sec": {
+      "despejado": 12.504,
+      "lluvia": 18.046,
+      "nublado": 12.895,
+      "tormenta": 24.862
+    },
+    "workday_peak_mean_sec": 17.61,
+    "workday_night_mean_sec": 11.324,
+    "peak_to_night_ratio": 1.555
+  },
+  "histogram_0_60s": {
+    "bin_edges": [
+      0.0,
+      3.0,
+      6.0,
+      9.0,
+      12.0,
+      15.0,
+      18.0,
+      21.0,
+      24.0,
+      27.0,
+      30.0,
+      33.0,
+      36.0,
+      39.0,
+      42.0,
+      45.0,
+      48.0,
+      51.0,
+      54.0,
+      57.0,
+      60.0
+    ],
+    "counts": [
+      8352,
+      8487,
+      19490,
+      14802,
+      15393,
+      11799,
+      6876,
+      4242,
+      2807,
+      1836,
+      1224,
+      943,
+      745,
+      565,
+      421,
+      274,
+      238,
+      173,
+      161,
+      1172
+    ]
+  }
+}
