@@ -387,6 +387,7 @@ graph TD
 5. **Lista Unificada de Paradas Numeradas con Drag-and-Drop (1, 2, 3...)**:
    * Waypoints numerados correlativamente con distintivos visuales de origen (verde esmeralda), paradas intermedias (azul) y destino (rosa/rojo).
    * Tiradores de arrastre interactivo (3 rayitas) que permiten reordenar manualmente la secuencia de paradas sobre la marcha con recálculo automático de la ruta.
+   
    ![alt text](image-1.png)
 6. **Buscador Predictivo de Esquinas y Calles (`StreetSearch`)**:
    * Barra de búsqueda con autocompletado inteligente sobre las arterias de Rosario, vinculada al índice espacial `cKDTree` con animación cinemática de aproximación (*flyTo*).
