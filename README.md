@@ -236,5 +236,3 @@ Al presentar el proyecto, se recomienda seguir estos **3 pasos clave**:
 
 - **Facundo Naveira**
 - **Leandro Caraballo**
-
-*Trabajo realizado para la carrera de Ingeniería / Ciencias de la Computación — Noviembre de 2026.*

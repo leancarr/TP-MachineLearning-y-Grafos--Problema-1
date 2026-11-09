@@ -380,17 +380,20 @@ graph TD
 3. **Trazado Dual Simultáneo de Alto Contraste**:
    * **Ruta Estática (Distancia mínima en metros)**: Trazada en **violeta brillante (`#C084FC`)** con patrón discontinuo (`dashArray: "10, 8"`) y ribete protector oscuro (`#020617`).
    * **Ruta Dinámica ML (Tiempo mínimo con IA)**: Trazada en **cian eléctrico (`#00F0FF`)** continuo con doble ribete exterior oscuro de alto contraste. Esta decisión de diseño garantiza que la ruta inteligente nunca se camufle con las arterias viales del mapa que ya se colorean en verde para indicar tráfico fluido.
+   ![alt text](image.png)
 4. **Reloj Digital Fluido (HH:MM) y Selector Contextual**:
    * Entradas desacopladas de hora y minuto con validación numérica inmediata, avance automático tras ingresar dos dígitos, retroceso fluido con tecla de borrado y botón de reinicio rápido (`RotateCcw`) para retornar a los valores basales.
    * Selectores directos de clima (Despejado, Nublado, Lluvia, Tormenta) y conmutador táctil de día feriado.
 5. **Lista Unificada de Paradas Numeradas con Drag-and-Drop (1, 2, 3...)**:
    * Waypoints numerados correlativamente con distintivos visuales de origen (verde esmeralda), paradas intermedias (azul) y destino (rosa/rojo).
    * Tiradores de arrastre interactivo (3 rayitas) que permiten reordenar manualmente la secuencia de paradas sobre la marcha con recálculo automático de la ruta.
-   * **Doble Modo Operativo**: Ruteo secuencial encadenado directo ($1 \to 2 \to 3\dots$) sin retorno obligatorio, o ronda logística completa TSP (con optimización 2-opt dirigida y retorno al depósito).
+   ![alt text](image-1.png)
 6. **Buscador Predictivo de Esquinas y Calles (`StreetSearch`)**:
    * Barra de búsqueda con autocompletado inteligente sobre las arterias de Rosario, vinculada al índice espacial `cKDTree` con animación cinemática de aproximación (*flyTo*).
+   ![alt text](image-2.png)
 7. **Tarjetas de Métricas con Explicación Causal**:
    * Detalla el tiempo neto ahorrado en minutos y porcentaje, justificando por qué la IA tomó un trayecto físicamente más largo para ahorrar tiempo real.
+   ![alt text](image-3.png)
 8. **Modal de Auditoría Científica**:
    * Accesible desde la barra superior, permite a los docentes auditar en vivo la matriz de confusión, residuos, hiperparámetros de los cuatro modelos y el ranking de importancia de variables sin salir de la aplicación web.
 
