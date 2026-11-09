@@ -253,14 +253,15 @@ export const App: React.FC = () => {
     [waypoints, calculateSequentialRoute]
   );
 
-  // Botón para volver a la hora y día reales del sistema operativo
+  // Botón para reiniciar solamente hora y día a los valores reales del sistema
   const handleUseCurrentTime = useCallback(() => {
     const sysCtx = getSystemDefaultContext();
     handleContextChange({
-      ...sysCtx,
-      clima: context.clima,
+      ...context,
+      hora_dia: sysCtx.hora_dia,
+      dia_semana: sysCtx.dia_semana,
     });
-  }, [context.clima, handleContextChange]);
+  }, [context, handleContextChange]);
 
   // Manejador cuando el usuario hace clic en el mapa (o elige una esquina en el buscador):
   // Evaluación inteligente:
@@ -657,7 +658,6 @@ export const App: React.FC = () => {
               showDynamicRoute={showDynamicRoute}
               onToggleDynamicRoute={() => setShowDynamicRoute((p) => !p)}
               isCalculating={isCalculating}
-              onResetPoints={handleResetPoints}
               onUseCurrentTime={handleUseCurrentTime}
             />
           </div>

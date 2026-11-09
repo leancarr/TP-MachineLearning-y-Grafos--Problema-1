@@ -199,27 +199,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
   const [edges, setEdges] = useState<ViewportEdge[]>([]);
   const [zoom, setZoom] = useState<number>(DEFAULT_ZOOM);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [snapping, setSnapping] = useState<boolean>(false);
-  const [stats, setStats] = useState<ViewportStats>({
-    totalEdges: 0,
-    maxHierarchyVisible: 2,
-    executionTimeMs: 0,
-    zoom: DEFAULT_ZOOM,
-    loading: false,
-  });
 
   // Shared Leaflet Canvas renderer for high-performance rendering of thousands of streets
   const canvasRenderer = useMemo(() => L.canvas({ padding: 0.5 }), []);
 
   const handleLoadingChange = useCallback(
     (isLoading: boolean, currentZoom: number) => {
-      setLoading(isLoading);
       setZoom(currentZoom);
-      setStats((prev) => {
-        const next = { ...prev, loading: isLoading, zoom: currentZoom };
-        onViewportStatsChange?.(next);
-        return next;
+      onViewportStatsChange?.({
+        totalEdges: 0,
+        maxHierarchyVisible: 2,
+        executionTimeMs: 0,
+        zoom: currentZoom,
+        loading: isLoading,
       });
     },
     [onViewportStatsChange]
@@ -229,16 +221,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     (resp: ViewportResponse, currentZoom: number) => {
       setEdges(resp.edges);
       setZoom(currentZoom);
-      setLoading(false);
-      const nextStats: ViewportStats = {
+      onViewportStatsChange?.({
         totalEdges: resp.total_edges,
         maxHierarchyVisible: resp.max_hierarchy_visible,
         executionTimeMs: resp.execution_time_ms,
         zoom: currentZoom,
         loading: false,
-      };
-      setStats(nextStats);
-      onViewportStatsChange?.(nextStats);
+      });
     },
     [onViewportStatsChange]
   );
@@ -247,14 +236,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     async (lat: number, lon: number) => {
       if (!onNodeSelected) return;
       const effectiveMode: SelectionMode = selectionMode || "origin";
-      setSnapping(true);
       try {
         const nearest = await fetchNearestNode(lat, lon);
         onNodeSelected(nearest, effectiveMode);
       } catch (err) {
         console.error("Error haciendo snap a esquina más cercana:", err);
-      } finally {
-        setSnapping(false);
       }
     },
     [selectionMode, onNodeSelected]
@@ -555,24 +541,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         <div className="flex items-center justify-between gap-4">
           <span className="font-semibold tracking-wide text-slate-100">
             Rosario Graph LOD (Zoom {zoom})
-          </span>
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-              loading || snapping
-                ? "bg-amber-500/20 text-amber-300"
-                : "bg-emerald-500/20 text-emerald-300"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                loading || snapping ? "animate-ping bg-amber-400" : "bg-emerald-400"
-              }`}
-            />
-            {snapping
-              ? "Snap esquina..."
-              : loading
-              ? "Actualizando ML..."
-              : `${stats.totalEdges.toLocaleString()} aristas (${stats.executionTimeMs.toFixed(0)} ms)`}
           </span>
         </div>
 

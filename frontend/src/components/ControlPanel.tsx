@@ -36,7 +36,6 @@ export interface ControlPanelProps {
   showDynamicRoute: boolean;
   onToggleDynamicRoute: () => void;
   isCalculating?: boolean;
-  onResetPoints?: () => void;
   onUseCurrentTime?: () => void;
   hideModeSwitch?: boolean;
 }
@@ -80,7 +79,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   showDynamicRoute,
   onToggleDynamicRoute,
   isCalculating,
-  onResetPoints,
   onUseCurrentTime,
   hideModeSwitch = false,
 }) => {
@@ -203,6 +201,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
         </div>
       )}
 
+      {/* Cabecera del Panel con botón de Reiniciar (hora y día a tiempo real) */}
+      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 text-[11px]">
+        <span className="font-semibold text-slate-200">
+          ⚙️ Condiciones de Tránsito y Mapa
+        </span>
+        {onUseCurrentTime && (
+          <button
+            type="button"
+            onClick={onUseCurrentTime}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-cyan-400 hover:text-cyan-300 transition"
+            title="Reiniciar hora y día a los valores reales del sistema"
+            data-testid="reset-context-btn"
+          >
+            <RotateCcw className="h-3 w-3" />
+            <span>Reiniciar</span>
+          </button>
+        )}
+      </div>
+
       {/* Reloj Digital Editable (estilo alarma HH:MM) */}
       <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
         <div className="flex items-center justify-between gap-2">
@@ -211,16 +228,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
               <Clock className="h-3.5 w-3.5 text-cyan-400" />
               <span>Hora</span>
             </span>
-            {onUseCurrentTime && (
-              <button
-                type="button"
-                onClick={onUseCurrentTime}
-                className="rounded-lg border border-slate-700 bg-slate-800/90 px-2 py-0.5 text-[10px] font-medium text-cyan-300 transition hover:border-cyan-500/50 hover:bg-slate-700"
-                title="Sincronizar con la hora y día actuales de tu sistema operativo"
-              >
-                Hora actual
-              </button>
-            )}
             {isRushHour && (
               <span className="flex items-center gap-0.5 rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
                 <Zap className="h-2.5 w-2.5 text-rose-400" />
@@ -360,20 +367,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
         <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400">
           <span className="flex items-center gap-1">
-            <Layers className="h-3 w-3 text-emerald-400" />
+            <Layers className="h-3 w-3 text-cyan-400" />
             <span>Capas del Mapa</span>
           </span>
-          {onResetPoints && (
-            <button
-              type="button"
-              onClick={onResetPoints}
-              className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-rose-400 transition"
-              title="Limpiar puntos y rutas del mapa"
-            >
-              <RotateCcw className="h-2.5 w-2.5" />
-              <span>Limpiar Ruta</span>
-            </button>
-          )}
         </div>
         <div className="grid grid-cols-3 gap-1.5 text-[11px]">
           <button
